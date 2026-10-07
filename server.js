@@ -1,13 +1,11 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 import Groq from "groq-sdk";
 
 import {
   loadJson,
-  getCompactCatalog
+  getCompactCatalogAndSolutions
 } from "./context/knowledge.js";
 
 import {
@@ -19,12 +17,6 @@ import {
 } from "./context/stateInstructions.js";
 
 dotenv.config();
-
-const __filename =
-  fileURLToPath(import.meta.url);
-
-const __dirname =
-  path.dirname(__filename);
 
 const app = express();
 
@@ -46,13 +38,6 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
 
-
-/*
-==================================================
-CORS
-==================================================
-*/
-
 const allowedOrigins = [
   "http://127.0.0.1:5500",
   "http://localhost:5500",
@@ -61,7 +46,6 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin(origin, callback) {
-
     if (
       !origin ||
       allowedOrigins.includes(origin)
@@ -75,10 +59,7 @@ const corsOptions = {
     );
   },
 
-  methods: [
-    "GET",
-    "POST"
-  ],
+  methods: ["GET", "POST"],
 
   allowedHeaders: [
     "Content-Type",
@@ -96,65 +77,38 @@ app.use(
   })
 );
 
+const conversations = new Map();
 
-/*
-==================================================
-FRONTEND
-==================================================
-*/
-
-const frontendPath =
-  path.join(
-    __dirname,
-    "../frontend"
-  );
-
-app.use(
-  express.static(frontendPath)
-);
-
-
-/*
-==================================================
-MEMORIA
-==================================================
-*/
-
-const conversations =
-  new Map();
-
-
-/*
-==================================================
-UTILIDADES
-==================================================
-*/
+/* =========================================================
+   UTILIDADES
+========================================================= */
 
 function normalize(value) {
-
   return String(value || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(
-      /[\u0300-\u036f]/g,
-      ""
-    );
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
+function getEvidenceHistory(history) {
+  if (!Array.isArray(history)) {
+    return [];
+  }
 
-/*
---------------------------------------------------
-Historial completo para el consejero
---------------------------------------------------
-*/
+  return history.filter(
+    message =>
+      message &&
+      message.role === "user" &&
+      typeof message.content === "string" &&
+      message.content.trim()
+  );
+}
 
 function conversationText(history) {
-
   return history
     .map(
       (message, index) => {
-
         const role =
           message.role === "user"
             ? "VENDEDOR"
@@ -171,41 +125,11 @@ ${message.content}
     .join("\n");
 }
 
-
-/*
---------------------------------------------------
-ÚNICAMENTE mensajes del vendedor.
-Estos son los únicos que pueden utilizarse
-como evidencia para el diagnóstico.
---------------------------------------------------
-*/
-
-function getEvidenceHistory(history) {
-
-  if (
-    !Array.isArray(history)
-  ) {
-    return [];
-  }
-
-  return history.filter(
-    message =>
-      message &&
-      message.role === "user" &&
-      typeof message.content === "string" &&
-      message.content.trim()
-  );
-}
-
-
 function evidenceText(history) {
-
   const evidence =
     getEvidenceHistory(history);
 
-  if (
-    evidence.length === 0
-  ) {
+  if (evidence.length === 0) {
     return "No existe información proporcionada todavía.";
   }
 
@@ -219,126 +143,7 @@ ${message.content}
     .join("\n");
 }
 
-
-/*
---------------------------------------------------
-Busca una evidencia real dentro de las respuestas
-del vendedor.
---------------------------------------------------
-*/
-
-function findEvidence(
-  history,
-  keywords
-) {
-
-  const evidence =
-    getEvidenceHistory(history);
-
-  for (
-    const message of evidence
-  ) {
-
-    const text =
-      normalize(
-        message.content
-      );
-
-    const found =
-      keywords.some(
-        keyword =>
-          text.includes(
-            normalize(keyword)
-          )
-      );
-
-    if (found) {
-      return message.content;
-    }
-  }
-
-  return evidence[0]?.content || "";
-}
-
-
-/*
---------------------------------------------------
-JSON
---------------------------------------------------
-*/
-
-function parseAgentJson(text) {
-
-  if (!text) {
-    return null;
-  }
-
-  let clean =
-    String(text).trim();
-
-  clean =
-    clean
-      .replace(
-        /^```json\s*/i,
-        ""
-      )
-      .replace(
-        /^```\s*/i,
-        ""
-      )
-      .replace(
-        /\s*```$/i,
-        ""
-      )
-      .trim();
-
-  try {
-
-    return JSON.parse(
-      clean
-    );
-
-  } catch {
-
-    const first =
-      clean.indexOf("{");
-
-    const last =
-      clean.lastIndexOf("}");
-
-    if (
-      first === -1 ||
-      last === -1 ||
-      last <= first
-    ) {
-      return null;
-    }
-
-    try {
-
-      return JSON.parse(
-        clean.slice(
-          first,
-          last + 1
-        )
-      );
-
-    } catch {
-
-      return null;
-    }
-  }
-}
-
-
-/*
---------------------------------------------------
-Historial
---------------------------------------------------
-*/
-
 function trimHistory(history) {
-
   if (
     history.length <= MAX_HISTORY
   ) {
@@ -361,15 +166,126 @@ function trimHistory(history) {
   );
 }
 
+/* =========================================================
+   JSON
+========================================================= */
 
-/*
-==================================================
-DETECCIÓN DE DIAGNÓSTICO
-==================================================
-*/
+function parseAgentJson(text) {
+  if (!text) {
+    return null;
+  }
+
+  let clean =
+    String(text)
+      .trim();
+
+  clean = clean
+    .replace(
+      /^```json\s*/i,
+      ""
+    )
+    .replace(
+      /^```\s*/i,
+      ""
+    )
+    .replace(
+      /\s*```$/i,
+      ""
+    )
+    .trim();
+
+  try {
+    return JSON.parse(clean);
+  } catch {
+    const first =
+      clean.indexOf("{");
+
+    const last =
+      clean.lastIndexOf("}");
+
+    if (
+      first === -1 ||
+      last === -1 ||
+      last <= first
+    ) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(
+        clean.slice(
+          first,
+          last + 1
+        )
+      );
+    } catch {
+      return null;
+    }
+  }
+}
+
+/* =========================================================
+   VALIDACIÓN
+========================================================= */
+
+function validateAdvisorResponse(data) {
+  if (
+    !data ||
+    typeof data !== "object"
+  ) {
+    return false;
+  }
+
+  if (
+    ![
+      "inicio",
+      "descubrimiento",
+      "objecion"
+    ].includes(data.estado)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function validateDiagnosisResponse(data) {
+  if (
+    !data ||
+    typeof data !== "object"
+  ) {
+    return false;
+  }
+
+  if (
+    data.estado !== "diagnostico"
+  ) {
+    return false;
+  }
+
+  if (
+    !Array.isArray(
+      data.diagnostico
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    !data.conclusion ||
+    typeof data.conclusion !== "object"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/* =========================================================
+   DETECCIÓN DE DIAGNÓSTICO
+========================================================= */
 
 function isDiagnosisRequest(text) {
-
   const value =
     normalize(text);
 
@@ -398,6 +314,8 @@ function isDiagnosisRequest(text) {
     "genera el diagnostico",
     "haz la matriz",
     "genera la matriz",
+    "haz el analisis con esto",
+    "haz el diagnostico con esto",
     "hazlo con esta informacion",
     "hazlo con la informacion",
     "hazlo con lo que tenemos",
@@ -423,32 +341,21 @@ function isDiagnosisRequest(text) {
   );
 }
 
-
-/*
-==================================================
-GROQ
-==================================================
-*/
+/* =========================================================
+   GROQ
+========================================================= */
 
 async function callGroq(
   model,
   messages,
   maxTokens
 ) {
-
   const params = {
     model,
-
     messages,
-
     temperature: 0.2,
-
     max_completion_tokens:
-      maxTokens,
-
-    response_format: {
-      type: "json_object"
-    }
+      maxTokens
   };
 
   if (
@@ -465,14 +372,11 @@ async function callGroq(
   );
 }
 
-
 async function askGroq(
   messages,
   maxTokens = 1500
 ) {
-
   try {
-
     const response =
       await callGroq(
         PRIMARY_MODEL,
@@ -481,26 +385,39 @@ async function askGroq(
       );
 
     const raw =
-      response
-        ?.choices?.[0]
+      response?.choices?.[0]
         ?.message
         ?.content || "";
 
+    const parsed =
+      parseAgentJson(raw);
+
+    if (!parsed) {
+      console.error(
+        "Respuesta RAW de Groq:"
+      );
+
+      console.error(raw);
+
+      throw new Error(
+        "La IA no devolvió JSON válido."
+      );
+    }
+
     return {
       raw,
-      parsed:
-        parseAgentJson(raw)
+      parsed
     };
 
   } catch (error) {
 
     if (
       error?.status === 429 &&
-      FALLBACK_MODEL
+      FALLBACK_MODEL &&
+      FALLBACK_MODEL !== PRIMARY_MODEL
     ) {
-
       console.warn(
-        "Usando modelo fallback."
+        "Usando modelo fallback por rate limit."
       );
 
       const response =
@@ -511,15 +428,28 @@ async function askGroq(
         );
 
       const raw =
-        response
-          ?.choices?.[0]
+        response?.choices?.[0]
           ?.message
           ?.content || "";
 
+      const parsed =
+        parseAgentJson(raw);
+
+      if (!parsed) {
+        console.error(
+          "Respuesta RAW del fallback:"
+        );
+
+        console.error(raw);
+
+        throw new Error(
+          "El modelo fallback no devolvió JSON válido."
+        );
+      }
+
       return {
         raw,
-        parsed:
-          parseAgentJson(raw)
+        parsed
       };
     }
 
@@ -527,183 +457,217 @@ async function askGroq(
   }
 }
 
-
-/*
-==================================================
-CONSEJERO
-==================================================
-*/
+/* =========================================================
+   ADVISOR
+========================================================= */
 
 async function generateAdvisorResponse(
   history
 ) {
+  const catalog =
+    getCompactCatalogAndSolutions();
 
-  const messages = [
-    personality,
-    stateInstructions,
-    ...history
-  ];
+  const prompt = `
+${stateInstructions.content}
 
-  const response =
-    await askGroq(
-      messages,
-      1400
-    );
+${catalog}
 
-  if (
-    !response.parsed ||
-    typeof response.parsed.estado !==
-      "string"
-  ) {
+INFORMACIÓN DE LA CONVERSACIÓN:
 
-    throw new Error(
-      "La IA devolvió una respuesta de consejero inválida."
-    );
-  }
+${conversationText(history)}
 
-  return response.parsed;
-}
-
-
-/*
-==================================================
-DIAGNÓSTICO - PROMPT
-==================================================
-*/
-
-function diagnosisPrompt(history) {
-
-  return `
-Eres un analista comercial de ciberseguridad.
-
-Tu tarea es identificar oportunidades de protección
-para una empresa a partir de información comercial real.
-
-==================================================
-EVIDENCIA PERMITIDA
-==================================================
-
-Únicamente puedes utilizar:
+DATOS CONFIRMADOS DEL VENDEDOR:
 
 ${evidenceText(history)}
 
-Los mensajes del CONSEJERO no son evidencia.
+GENERA LA SIGUIENTE RESPUESTA.
 
-Las preguntas no son evidencia.
+Si es la primera interacción:
+{
+  "estado": "inicio",
+  "pregunta": "Dame un resumen de la empresa y de cómo opera."
+}
 
-No conviertas una pregunta sin respuesta en un hecho.
+Si corresponde continuar descubrimiento:
+{
+  "estado": "descubrimiento",
+  "pregunta": "..."
+}
 
-==================================================
-OBJETIVO
-==================================================
+Si existe una objeción:
+{
+  "estado": "objecion",
+  "respuesta_sugerida": "...",
+  "siguiente_pregunta": "..."
+}
 
-No necesitas demostrar que existe una vulnerabilidad.
+RECUERDA:
 
-Debes identificar áreas y capas que sea razonable VALIDAR
-considerando la información confirmada de la empresa.
+- solamente una pregunta;
+- no productos;
+- no inventes datos;
+- JSON válido;
+- sin Markdown;
+- sin texto fuera del JSON.
+`;
 
-Ejemplo:
+  const result =
+    await askGroq(
+      [
+        personality,
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      1200
+    );
 
-Si sabemos que existen más de 1,000 empleados:
+  if (
+    !validateAdvisorResponse(
+      result.parsed
+    )
+  ) {
+    throw new Error(
+      "La respuesta del asesor no tiene un formato válido."
+    );
+  }
 
-CORRECTO:
-"El tamaño de la organización hace relevante validar
-cómo se administran y protegen los equipos."
+  return result.parsed;
+}
 
-INCORRECTO:
-"La empresa tiene equipos desprotegidos."
+/* =========================================================
+   DIAGNÓSTICO
+========================================================= */
 
-Si sabemos que existen plantas:
+function diagnosisPrompt(
+  history
+) {
+  const catalog =
+    getCompactCatalogAndSolutions();
 
-CORRECTO:
-"Conviene validar cómo se administran los activos
-tecnológicos entre las diferentes instalaciones."
+  return `
+${stateInstructions.content}
 
-INCORRECTO:
-"Las plantas tienen problemas de red."
+${catalog}
 
-==================================================
-REGLAS
-==================================================
+DATOS CONFIRMADOS DEL VENDEDOR:
 
-NO inventes:
+${evidenceText(history)}
 
-- vulnerabilidades;
-- ataques;
-- malware;
-- incidentes;
-- fugas;
-- tecnologías;
-- firewalls;
-- VPN;
-- nube;
-- servidores;
-- respaldos;
-- problemas;
-- deficiencias.
+CONTEXTO COMPLETO:
 
-Utiliza solamente IDs existentes.
+${conversationText(history)}
 
-CATÁLOGO:
+GENERA EL DIAGNÓSTICO.
 
-${getCompactCatalog()}
-
-Máximo 10 celdas.
-
-==================================================
-FORMATO
-==================================================
+Debes devolver exactamente esta estructura:
 
 {
+  "estado": "diagnostico",
   "diagnostico": [
     {
-      "area_id": "ID_EXISTENTE",
-      "capa_id": "ID_EXISTENTE",
+      "area_id": "ID_AREA",
+      "capa_id": "ID_CAPA",
       "prioridad": "alta",
-      "motivo": "Motivo basado en hechos.",
-      "evidencia": "Dato confirmado.",
+      "motivo": "Explicación breve",
+      "evidencia": "Información que proporcionó el vendedor o indicación de que debe validarse",
       "soluciones": [
-        "ID_EXISTENTE"
+        "ID_SOLUCION"
       ]
     }
   ],
   "conclusion": {
-    "resumen": "Resumen breve.",
-    "prioridades": [
-      "Prioridad"
-    ],
-    "siguiente_paso": "Siguiente paso."
+    "resumen": "Resumen ejecutivo",
+    "siguiente_paso": "Siguiente paso comercial"
   }
 }
 
-Devuelve únicamente JSON.
+REGLAS:
+
+1. Usa solamente IDs existentes en el catálogo.
+
+2. "area_id" debe ser un ID existente.
+
+3. "capa_id" debe ser un ID existente.
+
+4. "prioridad" solamente puede ser:
+   "alta", "media" o "baja".
+
+5. "soluciones" solamente contiene IDs.
+
+6. Nunca pongas nombres de productos en "soluciones".
+
+7. Nunca pongas Markdown en "soluciones".
+
+8. Nunca pongas barras verticales en "soluciones".
+
+9. Nunca pongas comas dentro de un mismo ID.
+
+10. Cada oportunidad debe corresponder a una combinación
+    válida de área + capa.
+
+11. Una solución solamente puede seleccionarse si el catálogo
+    indica que cubre esa combinación.
+
+12. No afirmes vulnerabilidades no confirmadas.
+
+13. Si existe poca información, puedes generar oportunidades
+    potenciales que deban validarse.
+
+14. No generes "prioridades" dentro de "conclusion".
+
+15. No generes ninguna sección global de prioridades.
+
+16. No hagas preguntas.
+
+17. No escribas nada fuera del JSON.
+
+18. Devuelve JSON válido.
 `;
 }
 
-
-/*
-==================================================
-ENRIQUECER DIAGNÓSTICO
-==================================================
-*/
-
-function enrichDiagnosis(diagnosis) {
+async function generateDiagnosis(
+  history
+) {
+  const result =
+    await askGroq(
+      [
+        personality,
+        {
+          role: "user",
+          content:
+            diagnosisPrompt(history)
+        }
+      ],
+      2200
+    );
 
   if (
-    !Array.isArray(diagnosis)
+    !validateDiagnosisResponse(
+      result.parsed
+    )
   ) {
-    return [];
+    throw new Error(
+      "El diagnóstico no tiene un formato válido."
+    );
   }
 
+  return result.parsed;
+}
+
+/* =========================================================
+   ENRIQUECIMIENTO
+========================================================= */
+
+function enrichDiagnosis(
+  diagnosis
+) {
   const catalog =
-    loadJson(
-      "catalog.json"
-    );
+    loadJson("catalog.json");
 
   const solutions =
-    loadJson(
-      "solutions.json"
-    );
+    loadJson("solutions.json");
 
   const areas =
     Array.isArray(catalog.areas)
@@ -715,11 +679,21 @@ function enrichDiagnosis(diagnosis) {
       ? catalog.capas
       : [];
 
+  const solutionMap =
+    new Map(
+      solutions.map(
+        solution => [
+          solution.id,
+          solution
+        ]
+      )
+    );
+
   const areaMap =
     new Map(
       areas.map(
         area => [
-          normalize(area.id),
+          area.id,
           area
         ]
       )
@@ -729,31 +703,18 @@ function enrichDiagnosis(diagnosis) {
     new Map(
       capas.map(
         capa => [
-          normalize(capa.id),
+          capa.id,
           capa
-        ]
-      )
-    );
-
-  const solutionMap =
-    new Map(
-      solutions.map(
-        solution => [
-          normalize(solution.id),
-          solution
         ]
       )
     );
 
   const result = [];
 
-  const usedCells =
-    new Set();
-
   for (
-    const item of diagnosis
+    const item
+    of diagnosis.diagnostico
   ) {
-
     if (
       !item ||
       typeof item !== "object"
@@ -763,41 +724,20 @@ function enrichDiagnosis(diagnosis) {
 
     const area =
       areaMap.get(
-        normalize(
-          item.area_id ||
-          item.area
-        )
+        item.area_id
       );
 
     const capa =
       capaMap.get(
-        normalize(
-          item.capa_id ||
-          item.capa
-        )
+        item.capa_id
       );
 
-    if (
-      !area ||
-      !capa
-    ) {
+    if (!area || !capa) {
       continue;
     }
 
-    const cell =
+    const cellId =
       `${area.id}.${capa.id}`;
-
-    if (
-      usedCells.has(
-        normalize(cell)
-      )
-    ) {
-      continue;
-    }
-
-    usedCells.add(
-      normalize(cell)
-    );
 
     const covering =
       solutions.filter(
@@ -805,88 +745,52 @@ function enrichDiagnosis(diagnosis) {
           Array.isArray(
             solution.cubre
           ) &&
-          solution.cubre.some(
-            value =>
-              normalize(value) ===
-              normalize(cell)
+          solution.cubre.includes(
+            cellId
           )
       );
 
-    const requested =
+    const requestedIds =
       Array.isArray(
         item.soluciones
       )
         ? item.soluciones
         : [];
 
-    const selected =
-      requested
-        .map(
-          solutionId => {
+    const validRequested =
+      requestedIds.filter(
+        id =>
+          typeof id === "string" &&
+          covering.some(
+            solution =>
+              solution.id === id
+          )
+      );
 
-            const id =
-              typeof solutionId === "string"
-                ? solutionId
-                : solutionId?.id;
-
-            return solutionMap.get(
-              normalize(id)
+    const selectedIds =
+      validRequested.length > 0
+        ? validRequested
+        : covering
+            .slice(0, 3)
+            .map(
+              solution =>
+                solution.id
             );
-          }
+
+    const enrichedSolutions =
+      selectedIds
+        .map(
+          id =>
+            solutionMap.get(id)
         )
-        .filter(
-          solution =>
-            solution &&
-            covering.some(
-              valid =>
-                normalize(valid.id) ===
-                normalize(solution.id)
-            )
-        );
-
-    const finalSolutions =
-      selected.length > 0
-        ? selected
-        : covering.slice(0, 3);
-
-    result.push({
-
-      area:
-        area.id,
-
-      area_nombre:
-        area.nombre,
-
-      capa:
-        capa.id,
-
-      capa_nombre:
-        capa.nombre,
-
-      prioridad:
-        normalize(
-          item.prioridad
-        ) || "media",
-
-      motivo:
-        String(
-          item.motivo || ""
-        ).trim(),
-
-      evidencia:
-        String(
-          item.evidencia || ""
-        ).trim(),
-
-      soluciones:
-        finalSolutions.map(
+        .filter(Boolean)
+        .map(
           solution => ({
-
             id:
               solution.id,
 
             nombre:
-              solution.nombre,
+              solution.nombre || "",
 
             categoria:
               solution.categoria || "",
@@ -895,7 +799,8 @@ function enrichDiagnosis(diagnosis) {
               solution.descripcion || "",
 
             necesidad_que_atiende:
-              solution.necesidad_que_atiende || "",
+              solution.necesidad_que_atiende ||
+              "",
 
             que_validar:
               Array.isArray(
@@ -907,725 +812,276 @@ function enrichDiagnosis(diagnosis) {
             url:
               solution.url || ""
           })
-        )
+        );
+
+    result.push({
+      area_id:
+        area.id,
+
+      area_nombre:
+        area.nombre,
+
+      capa_id:
+        capa.id,
+
+      capa_nombre:
+        capa.nombre,
+
+      prioridad:
+        normalizePriorityForServer(
+          item.prioridad
+        ),
+
+      motivo:
+        item.motivo || "",
+
+      evidencia:
+        item.evidencia || "",
+
+      soluciones:
+        enrichedSolutions
     });
   }
 
   return result;
 }
 
-
-/*
-==================================================
-FALLBACK DETERMINÍSTICO
-==================================================
-
-Si Groq no devuelve IDs válidos, el backend todavía
-puede construir oportunidades a partir de evidencia real.
-==================================================
-*/
-
-function buildFallbackDiagnosis(history) {
-
-  const evidence =
-    evidenceText(history);
-
-  const text =
-    normalize(evidence);
-
-  const results = [];
-
-  const largeOrganization =
-    text.includes("1000") ||
-    text.includes("1000+") ||
-    text.includes("1,000") ||
-    text.includes("25000") ||
-    text.includes("25,000") ||
-    text.includes("multinacional") ||
-    text.includes("empleados");
-
-  const manufacturing =
-    text.includes("manufactura") ||
-    text.includes("manufacturera") ||
-    text.includes("fabricacion") ||
-    text.includes("fabricación") ||
-    text.includes("planta") ||
-    text.includes("plantas");
-
-  /*
-  ----------------------------------------------
-  HOST / ACTIVOS
-  ----------------------------------------------
-  */
-
-  if (largeOrganization) {
-
-    results.push({
-
-      area_id:
-        "host",
-
-      capa_id:
-        "activos",
-
-      prioridad:
-        "alta",
-
-      motivo:
-        "El tamaño de la organización hace relevante validar cómo se administran y protegen los equipos utilizados por los colaboradores.",
-
-      evidencia:
-        findEvidence(
-          history,
-          [
-            "empleados",
-            "25,000",
-            "25.000",
-            "1,000",
-            "1000"
-          ]
-        ),
-
-      soluciones: []
-    });
-  }
-
-
-  /*
-  ----------------------------------------------
-  RED / ACTIVOS
-  ----------------------------------------------
-  */
+function normalizePriorityForServer(
+  value
+) {
+  const normalized =
+    normalize(value);
 
   if (
-    largeOrganization &&
-    manufacturing
+    [
+      "alta",
+      "high",
+      "critica",
+      "critica"
+    ].includes(normalized)
   ) {
-
-    results.push({
-
-      area_id:
-        "red",
-
-      capa_id:
-        "activos",
-
-      prioridad:
-        "alta",
-
-      motivo:
-        "La operación manufacturera y el tamaño de la organización hacen relevante validar cómo se identifican y administran los activos conectados a la red.",
-
-      evidencia:
-        findEvidence(
-          history,
-          [
-            "planta",
-            "plantas",
-            "manufactura",
-            "manufacturera"
-          ]
-        ),
-
-      soluciones: []
-    });
+    return "alta";
   }
 
-
-  /*
-  ----------------------------------------------
-  NO TÉCNICA / BUENAS PRÁCTICAS
-  ----------------------------------------------
-  */
-
-  if (largeOrganization) {
-
-    results.push({
-
-      area_id:
-        "no_tecnica",
-
-      capa_id:
-        "buenas_practicas",
-
-      prioridad:
-        "media",
-
-      motivo:
-        "El tamaño y alcance de la organización hacen relevante validar que existan prácticas y procesos de ciberseguridad establecidos de manera consistente.",
-
-      evidencia:
-        findEvidence(
-          history,
-          [
-            "multinacional",
-            "empleados",
-            "paises",
-            "países"
-          ]
-        ),
-
-      soluciones: []
-    });
+  if (
+    [
+      "media",
+      "medium"
+    ].includes(normalized)
+  ) {
+    return "media";
   }
 
-
-  /*
-  ----------------------------------------------
-  SEGURIDAD FÍSICA / ACTIVOS
-  ----------------------------------------------
-  */
-
-  if (manufacturing) {
-
-    results.push({
-
-      area_id:
-        "fisica",
-
-      capa_id:
-        "activos",
-
-      prioridad:
-        "media",
-
-      motivo:
-        "La existencia de plantas de manufactura hace relevante validar cómo se controlan y administran físicamente los activos tecnológicos dentro de las instalaciones.",
-
-      evidencia:
-        findEvidence(
-          history,
-          [
-            "planta",
-            "plantas",
-            "manufactura"
-          ]
-        ),
-
-      soluciones: []
-    });
+  if (
+    [
+      "baja",
+      "low"
+    ].includes(normalized)
+  ) {
+    return "baja";
   }
 
-
-  return enrichDiagnosis(
-    results
-  );
+  return "baja";
 }
 
-
-/*
-==================================================
-GENERAR DIAGNÓSTICO
-==================================================
-*/
-
-async function generateDiagnosis(history) {
-
-  /*
-  ================================================
-  PRIMER INTENTO
-  ================================================
-  */
-
-  const first =
-    await askGroq(
-      [
-        {
-          role:
-            "system",
-
-          content:
-            diagnosisPrompt(
-              history
-            )
-        }
-      ],
-      3500
-    );
-
-  const firstDiagnosis =
-    enrichDiagnosis(
-      first.parsed?.diagnostico
-    );
-
-  if (
-    firstDiagnosis.length > 0
-  ) {
-
-    return {
-
-      ...first.parsed,
-
-      diagnostico:
-        firstDiagnosis
-    };
-  }
-
-  console.warn(
-    "Primer diagnóstico sin celdas válidas."
-  );
-
-  console.warn(
-    first.raw
-  );
-
-
-  /*
-  ================================================
-  SEGUNDO INTENTO
-  ================================================
-  */
-
-  const second =
-    await askGroq(
-      [
-        {
-          role:
-            "system",
-
-          content:
-            diagnosisPrompt(
-              history
-            )
-        },
-
-        {
-          role:
-            "user",
-
-          content: `
-La respuesta anterior no produjo celdas válidas.
-
-Debes devolver CELDAS REALES del catálogo.
-
-ÁREAS VÁLIDAS:
-
-no_tecnica
-fisica
-perimetraje
-red
-host
-aplicacion
-datos
-
-CAPAS VÁLIDAS:
-
-activos
-vulnerabilidades
-parches
-malware
-perimetro
-respaldos
-dlp
-buenas_practicas
-
-Ejemplo:
-
-{
-  "area_id": "host",
-  "capa_id": "activos",
-  "prioridad": "media",
-  "motivo": "El tamaño de la organización hace relevante validar cómo se administran los equipos.",
-  "evidencia": "Cuenta con más de 1,000 empleados directos.",
-  "soluciones": []
-}
-
-No inventes vulnerabilidades.
-
-Devuelve al menos una celda si existe información empresarial.
-`
-        }
-      ],
-      3500
-    );
-
-  const secondDiagnosis =
-    enrichDiagnosis(
-      second.parsed?.diagnostico
-    );
-
-  if (
-    secondDiagnosis.length > 0
-  ) {
-
-    return {
-
-      ...second.parsed,
-
-      diagnostico:
-        secondDiagnosis
-    };
-  }
-
-  console.warn(
-    "Segundo diagnóstico sin celdas válidas."
-  );
-
-
-  /*
-  ================================================
-  FALLBACK
-  ================================================
-  */
-
-  const fallback =
-    buildFallbackDiagnosis(
-      history
-    );
-
-  if (
-    fallback.length > 0
-  ) {
-
-    return {
-
-      diagnostico:
-        fallback,
-
-      conclusion: {
-
-        resumen:
-          "Con la información disponible se identifican áreas que conviene validar debido al tamaño y características operativas de la organización.",
-
-        prioridades: [
-          "Administración de activos informáticos",
-          "Protección de dispositivos y red",
-          "Mejores prácticas de ciberseguridad"
-        ],
-
-        siguiente_paso:
-          "Validar con el responsable de TI cómo administran actualmente sus activos, dispositivos y controles de seguridad."
-      }
-    };
-  }
-
-  throw new Error(
-    "No fue posible generar oportunidades con la información disponible."
-  );
-}
-
-
-/*
-==================================================
-ANÁLISIS DE SOLUCIONES
-==================================================
-*/
+/* =========================================================
+   ANÁLISIS DE SOLUCIONES
+========================================================= */
 
 async function generateSolutionAnalysis(
-  history,
   diagnosis
 ) {
-
-  const solutions =
-    loadJson(
-      "solutions.json"
-    );
-
-  const ids = [
-    ...new Set(
-      diagnosis.flatMap(
-        item =>
-          Array.isArray(
-            item.soluciones
-          )
-            ? item.soluciones.map(
-                solution =>
-                  solution.id
-              )
-            : []
-      )
-    )
-  ];
-
-  if (
-    ids.length === 0
+  for (
+    const item
+    of diagnosis
   ) {
-    return [];
-  }
+    for (
+      const solution
+      of item.soluciones || []
+    ) {
+      const prompt = `
+Analiza la aplicación comercial de esta solución.
 
-  const selected =
-    solutions.filter(
-      solution =>
-        ids.includes(
-          solution.id
-        )
-    );
+EMPRESA / CONTEXTO:
+${item.evidencia || "No existe evidencia directa suficiente."}
 
-  const prompt = `
-Eres un asesor comercial de ciberseguridad.
+MOTIVO:
+${item.motivo || ""}
 
-Explica por qué cada solución seleccionada es pertinente
-para la empresa.
+SOLUCIÓN:
+${solution.nombre}
 
-DATOS CONFIRMADOS:
+DESCRIPCIÓN:
+${solution.descripcion}
 
-${evidenceText(history)}
+NECESIDAD:
+${solution.necesidad_que_atiende}
 
-DIAGNÓSTICO:
-
-${JSON.stringify(
-  diagnosis,
-  null,
-  2
-)}
-
-SOLUCIONES:
-
-${JSON.stringify(
-  selected,
-  null,
-  2
-)}
-
-REGLAS:
-
-- No inventes problemas.
-- No inventes tecnologías.
-- No inventes incidentes.
-- No digas que una protección es inexistente.
-- No conviertas una oportunidad en una deficiencia confirmada.
-- Basa cada explicación en datos confirmados.
-
-Si solamente existe información suficiente para decir
-que algo debe validarse, utiliza ese enfoque.
-
-Ejemplo correcto:
-
-"El tamaño de la organización hace pertinente validar
-cómo se administran y protegen los equipos."
-
-Ejemplo incorrecto:
-
-"La empresa tiene equipos desprotegidos."
-
-FORMATO:
+Responde solamente:
 
 {
-  "soluciones": [
-    {
-      "id": "ID",
-      "por_que_aplica": "Explicación concreta."
-    }
-  ]
+  "por_que_aplica": "Explicación breve y consultiva"
 }
 
-JSON válido únicamente.
+No inventes información.
+Si la evidencia es insuficiente, indica que debe validarse.
+Devuelve únicamente JSON válido.
 `;
 
-  const response =
-    await askGroq(
-      [
-        {
-          role:
-            "system",
+      try {
+        const result =
+          await askGroq(
+            [
+              personality,
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            500
+          );
 
-          content:
-            prompt
+        if (
+          result.parsed &&
+          typeof result.parsed.por_que_aplica ===
+            "string"
+        ) {
+          solution.por_que_aplica =
+            result.parsed.por_que_aplica;
         }
-      ],
-      3000
-    );
 
-  return Array.isArray(
-    response.parsed?.soluciones
-  )
-    ? response.parsed.soluciones
-    : [];
+      } catch (error) {
+        console.error(
+          "Error analizando solución:",
+          error.message
+        );
+
+        solution.por_que_aplica =
+          "Conviene validar esta solución con el prospecto para confirmar su aplicabilidad.";
+      }
+    }
+  }
+
+  return diagnosis;
 }
 
-
-/*
-==================================================
-API CHAT
-==================================================
-*/
+/* =========================================================
+   CHAT
+========================================================= */
 
 app.post(
   "/api/chat",
-  async (
-    req,
-    res
-  ) => {
-
+  async (req, res) => {
     try {
+      const userId =
+        String(
+          req.body?.userId || ""
+        ).trim();
 
       const prompt =
         String(
-          req.body?.prompt ??
-          req.body?.message ??
-          ""
-        )
-          .trim()
-          .slice(
-            0,
-            MAX_MESSAGE_LENGTH
-          );
+          req.body?.prompt || ""
+        ).trim();
 
-      const userId =
-        String(
-          req.body?.userId ??
-          req.body?.conversationId ??
-          "default"
-        );
+      if (!userId) {
+        return res.status(400).json({
+          error:
+            "Falta userId."
+        });
+      }
 
       if (!prompt) {
-
-        return res
-          .status(400)
-          .json({
-            error:
-              "El mensaje está vacío."
-          });
+        return res.status(400).json({
+          error:
+            "Falta prompt."
+        });
       }
 
       if (
-        !conversations.has(
-          userId
-        )
+        prompt.length >
+        MAX_MESSAGE_LENGTH
       ) {
+        return res.status(400).json({
+          error:
+            `El mensaje no puede superar ${MAX_MESSAGE_LENGTH} caracteres.`
+        });
+      }
+
+      let history =
+        conversations.get(userId);
+
+      if (!history) {
+        history = [];
 
         conversations.set(
           userId,
-          []
+          history
         );
       }
 
-      const history =
-        conversations.get(
-          userId
-        );
-
-
-      /*
-      ==============================================
-      DIAGNÓSTICO
-      ==============================================
-      */
+      /* ===============================================
+         DIAGNÓSTICO
+      =============================================== */
 
       if (
-        isDiagnosisRequest(
-          prompt
-        )
+        isDiagnosisRequest(prompt)
       ) {
-
-        /*
-        El comando NO se agrega al historial.
-        */
-
-        const context =
+        const diagnosisHistory =
           [...history];
 
         const diagnosis =
           await generateDiagnosis(
-            context
+            diagnosisHistory
           );
 
-        const analysis =
+        const enriched =
+          enrichDiagnosis(
+            diagnosis
+          );
+
+        const analyzed =
           await generateSolutionAnalysis(
-            context,
-            diagnosis.diagnostico
+            enriched
           );
-
-        const analysisMap =
-          new Map(
-            analysis.map(
-              item => [
-                item.id,
-                item.por_que_aplica
-              ]
-            )
-          );
-
-        const finalDiagnosis =
-          diagnosis.diagnostico.map(
-            item => ({
-
-              ...item,
-
-              soluciones:
-                item.soluciones.map(
-                  solution => ({
-
-                    ...solution,
-
-                    por_que_aplica:
-                      analysisMap.get(
-                        solution.id
-                      ) ||
-                      "La información disponible permite considerar esta solución como una oportunidad a validar; no confirma que exista actualmente una deficiencia."
-                  })
-                )
-            })
-          );
-
-
-        /*
-        Guardar diagnóstico como respuesta
-        del consejero.
-        */
 
         history.push({
+          role: "assistant",
+          content: JSON.stringify({
+            estado:
+              "diagnostico",
 
-          role:
-            "assistant",
+            diagnostico:
+              analyzed,
 
-          content:
-            JSON.stringify({
-
-              estado:
-                "diagnostico",
-
-              diagnostico:
-                finalDiagnosis
-            })
+            conclusion:
+              diagnosis.conclusion
+          })
         });
 
-        trimHistory(
-          history
-        );
+        trimHistory(history);
 
         return res.json({
-
           estado:
             "diagnostico",
 
           diagnostico:
-            finalDiagnosis,
+            analyzed,
 
           conclusion:
-            diagnosis.conclusion ||
-            {
-              resumen:
-                "",
-
-              prioridades:
-                [],
-
-              siguiente_paso:
-                ""
-            }
+            diagnosis.conclusion
         });
       }
 
-
-      /*
-      ==============================================
-      CONVERSACIÓN NORMAL
-      ==============================================
-      */
+      /* ===============================================
+         MENSAJE NORMAL
+      =============================================== */
 
       history.push({
-
-        role:
-          "user",
-
-        content:
-          prompt
+        role: "user",
+        content: prompt
       });
 
-      trimHistory(
-        history
-      );
+      trimHistory(history);
 
       const response =
         await generateAdvisorResponse(
@@ -1633,108 +1089,106 @@ app.post(
         );
 
       history.push({
-
-        role:
-          "assistant",
-
+        role: "assistant",
         content:
-          JSON.stringify(
-            response
-          )
+          JSON.stringify(response)
       });
 
-      trimHistory(
-        history
-      );
+      trimHistory(history);
 
       return res.json(
         response
       );
 
     } catch (error) {
-
       console.error(
-        "Error interacting with GROQ API:"
+        "Error en /api/chat:"
       );
 
       console.error(
         error
       );
 
-      return res
-        .status(500)
-        .json({
+      const status =
+        Number.isInteger(
+          error?.status
+        )
+          ? error.status
+          : 500;
 
-          error:
-            error?.message ||
-            "Error procesando la solicitud."
-        });
+      return res.status(
+        status >= 400 &&
+        status < 600
+          ? status
+          : 500
+      ).json({
+        error:
+          error?.message ||
+          "Error interno del servidor."
+      });
     }
   }
 );
 
-
-/*
-==================================================
-CATÁLOGO
-==================================================
-*/
+/* =========================================================
+   CATÁLOGO
+========================================================= */
 
 app.get(
   "/api/catalog",
-  (
-    req,
-    res
-  ) => {
-
+  (req, res) => {
     try {
-
-      res.json(
+      const catalog =
         loadJson(
           "catalog.json"
-        )
-      );
+        );
+
+      res.json({
+        areas:
+          Array.isArray(
+            catalog.areas
+          )
+            ? catalog.areas
+            : [],
+
+        capas:
+          Array.isArray(
+            catalog.capas
+          )
+            ? catalog.capas
+            : []
+      });
 
     } catch (error) {
-
       console.error(
         error
       );
 
-      res
-        .status(500)
-        .json({
-          error:
-            "No se pudo cargar el catálogo."
-        });
+      res.status(500).json({
+        error:
+          "No se pudo cargar el catálogo."
+      });
     }
   }
 );
 
-
-/*
-==================================================
-RESET
-==================================================
-*/
+/* =========================================================
+   RESET
+========================================================= */
 
 app.post(
   "/api/reset",
-  (
-    req,
-    res
-  ) => {
-
+  (req, res) => {
     const userId =
       String(
-        req.body?.userId ??
-        req.body?.conversationId ??
-        "default"
-      );
+        req.body?.userId || ""
+      ).trim();
 
-    conversations.delete(
-      userId
-    );
+    if (userId) {
+      conversations.delete(
+        userId
+      );
+    }
 
     res.json({
       ok: true
@@ -1742,46 +1196,38 @@ app.post(
   }
 );
 
-
-/*
-==================================================
-FRONTEND FALLBACK
-==================================================
-*/
+/* =========================================================
+   HEALTH
+========================================================= */
 
 app.get(
-  "/{*splat}",
-  (
-    req,
-    res
-  ) => {
-
-    res.sendFile(
-      path.join(
-        frontendPath,
-        "index.html"
-      )
-    );
+  "/",
+  (req, res) => {
+    res.json({
+      ok: true,
+      service:
+        "Consejero Cero Uno API"
+    });
   }
 );
 
-
-/*
-==================================================
-SERVER
-==================================================
-*/
+/* =========================================================
+   START
+========================================================= */
 
 app.listen(
   PORT,
   () => {
-
     console.log(
       `Servidor ejecutándose en http://localhost:${PORT}`
     );
 
     console.log(
-      `Modelo: ${PRIMARY_MODEL}`
+      `Modelo principal: ${PRIMARY_MODEL}`
+    );
+
+    console.log(
+      `Modelo fallback: ${FALLBACK_MODEL}`
     );
   }
 );
