@@ -48,7 +48,7 @@ const groq = new Groq({
 
 
 // const allowedOrigins = ['http://127.0.0.1:5500']; // On Development ***
-const allowedOrigins = ["https://solutions-advicer.netlify"]; // On Production ***
+const allowedOrigins = ["https://solutions-advicer.netlify.app"]; // On Production ***
 
 const corsOptions = {
   origin: function (origin, callback) {
