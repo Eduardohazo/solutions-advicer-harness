@@ -47,28 +47,61 @@ const groq = new Groq({
 });
 
 
-// const allowedOrigins = ['http://127.0.0.1:5500']; // On Development ***
-const allowedOrigins = ["https://solutions-advicer.netlify.app"]; // On Production ***
+/*
+==================================================
+CORS
+==================================================
+*/
+
+const allowedOrigins = [
+  "http://127.0.0.1:5500",
+  "http://localhost:5500",
+  "https://solutions-advicer.netlify.app"
+];
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+  origin(origin, callback) {
+
+    if (
+      !origin ||
+      allowedOrigins.includes(origin)
+    ) {
       callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+      return;
     }
+
+    callback(
+      new Error("Not allowed by CORS")
+    );
   },
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+
+  methods: [
+    "GET",
+    "POST"
+  ],
+
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization"
+  ]
 };
 
-app.use(cors(corsOptions)); // On Production or development ***
+app.use(
+  cors(corsOptions)
+);
 
 app.use(
   express.json({
     limit: "2mb"
   })
 );
+
+
+/*
+==================================================
+FRONTEND
+==================================================
+*/
 
 const frontendPath =
   path.join(
@@ -80,13 +113,16 @@ app.use(
   express.static(frontendPath)
 );
 
+
 /*
 ==================================================
 MEMORIA
 ==================================================
 */
 
-const conversations = new Map();
+const conversations =
+  new Map();
+
 
 /*
 ==================================================
@@ -95,12 +131,144 @@ UTILIDADES
 */
 
 function normalize(value) {
+
   return String(value || "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    );
 }
 
+
+/*
+--------------------------------------------------
+Historial completo para el consejero
+--------------------------------------------------
+*/
+
+function conversationText(history) {
+
+  return history
+    .map(
+      (message, index) => {
+
+        const role =
+          message.role === "user"
+            ? "VENDEDOR"
+            : "CONSEJERO";
+
+        return `
+--- MENSAJE ${index + 1} ---
+${role}:
+
+${message.content}
+`;
+      }
+    )
+    .join("\n");
+}
+
+
+/*
+--------------------------------------------------
+ÚNICAMENTE mensajes del vendedor.
+Estos son los únicos que pueden utilizarse
+como evidencia para el diagnóstico.
+--------------------------------------------------
+*/
+
+function getEvidenceHistory(history) {
+
+  if (
+    !Array.isArray(history)
+  ) {
+    return [];
+  }
+
+  return history.filter(
+    message =>
+      message &&
+      message.role === "user" &&
+      typeof message.content === "string" &&
+      message.content.trim()
+  );
+}
+
+
+function evidenceText(history) {
+
+  const evidence =
+    getEvidenceHistory(history);
+
+  if (
+    evidence.length === 0
+  ) {
+    return "No existe información proporcionada todavía.";
+  }
+
+  return evidence
+    .map(
+      (message, index) => `
+--- DATO CONFIRMADO ${index + 1} ---
+${message.content}
+`
+    )
+    .join("\n");
+}
+
+
+/*
+--------------------------------------------------
+Busca una evidencia real dentro de las respuestas
+del vendedor.
+--------------------------------------------------
+*/
+
+function findEvidence(
+  history,
+  keywords
+) {
+
+  const evidence =
+    getEvidenceHistory(history);
+
+  for (
+    const message of evidence
+  ) {
+
+    const text =
+      normalize(
+        message.content
+      );
+
+    const found =
+      keywords.some(
+        keyword =>
+          text.includes(
+            normalize(keyword)
+          )
+      );
+
+    if (found) {
+      return message.content;
+    }
+  }
+
+  return evidence[0]?.content || "";
+}
+
+
+/*
+--------------------------------------------------
+JSON
+--------------------------------------------------
+*/
+
 function parseAgentJson(text) {
+
   if (!text) {
     return null;
   }
@@ -108,24 +276,30 @@ function parseAgentJson(text) {
   let clean =
     String(text).trim();
 
-  clean = clean
-    .replace(
-      /^```json\s*/i,
-      ""
-    )
-    .replace(
-      /^```\s*/i,
-      ""
-    )
-    .replace(
-      /\s*```$/i,
-      ""
-    )
-    .trim();
+  clean =
+    clean
+      .replace(
+        /^```json\s*/i,
+        ""
+      )
+      .replace(
+        /^```\s*/i,
+        ""
+      )
+      .replace(
+        /\s*```$/i,
+        ""
+      )
+      .trim();
 
   try {
-    return JSON.parse(clean);
+
+    return JSON.parse(
+      clean
+    );
+
   } catch {
+
     const first =
       clean.indexOf("{");
 
@@ -141,22 +315,32 @@ function parseAgentJson(text) {
     }
 
     try {
+
       return JSON.parse(
         clean.slice(
           first,
           last + 1
         )
       );
+
     } catch {
+
       return null;
     }
   }
 }
 
+
+/*
+--------------------------------------------------
+Historial
+--------------------------------------------------
+*/
+
 function trimHistory(history) {
+
   if (
-    history.length <=
-    MAX_HISTORY
+    history.length <= MAX_HISTORY
   ) {
     return;
   }
@@ -177,51 +361,68 @@ function trimHistory(history) {
   );
 }
 
-function conversationText(history) {
-  return history
-    .map(
-      (message, index) => {
-        const role =
-          message.role === "user"
-            ? "ENTRADA DEL VENDEDOR"
-            : "CONSEJERO";
-
-        return `
---- MENSAJE ${index + 1} ---
-${role}:
-
-${message.content}
-`;
-      }
-    )
-    .join("\n");
-}
 
 /*
 ==================================================
-DETECCIÓN DEL COMANDO DE DIAGNÓSTICO
+DETECCIÓN DE DIAGNÓSTICO
 ==================================================
 */
 
 function isDiagnosisRequest(text) {
+
   const value =
     normalize(text);
 
-  return (
-    value.includes("diagnostico") ||
-    value.includes("diagnóstico") ||
-    value.includes("haz el analisis") ||
-    value.includes("haz el análisis") ||
-    value.includes("genera el analisis") ||
-    value.includes("genera el análisis") ||
-    value.includes("haz el diagnostico") ||
-    value.includes("haz el diagnóstico") ||
-    value === "analisis" ||
-    value === "análisis" ||
-    value === "diagnostico" ||
-    value === "diagnóstico"
+  const exactCommands = [
+    "diagnostico",
+    "analisis",
+    "matriz",
+    "haz el analisis",
+    "haz el diagnostico",
+    "genera el analisis",
+    "genera el diagnostico",
+    "analisis completo",
+    "diagnostico completo"
+  ];
+
+  if (
+    exactCommands.includes(value)
+  ) {
+    return true;
+  }
+
+  const phrases = [
+    "haz el analisis",
+    "haz el diagnostico",
+    "genera el analisis",
+    "genera el diagnostico",
+    "haz la matriz",
+    "genera la matriz",
+    "hazlo con esta informacion",
+    "hazlo con la informacion",
+    "hazlo con lo que tenemos",
+    "hazlo con lo que te di",
+    "hazlo con lo anterior",
+    "ya con eso",
+    "con eso es suficiente",
+    "con eso puedes hacerlo",
+    "ya puedes hacerlo",
+    "puedes hacerlo con eso",
+    "trata de hacerlo",
+    "trata de hacerlo con lo que tenemos",
+    "genera el diagnostico con esto",
+    "genera el analisis con esto",
+    "genera el diagnostico con la informacion",
+    "genera el analisis con la informacion",
+    "ya tenemos suficiente informacion"
+  ];
+
+  return phrases.some(
+    phrase =>
+      value.includes(phrase)
   );
 }
+
 
 /*
 ==================================================
@@ -234,10 +435,14 @@ async function callGroq(
   messages,
   maxTokens
 ) {
+
   const params = {
     model,
+
     messages,
+
     temperature: 0.2,
+
     max_completion_tokens:
       maxTokens,
 
@@ -260,11 +465,14 @@ async function callGroq(
   );
 }
 
+
 async function askGroq(
   messages,
   maxTokens = 1500
 ) {
+
   try {
+
     const response =
       await callGroq(
         PRIMARY_MODEL,
@@ -283,14 +491,14 @@ async function askGroq(
       parsed:
         parseAgentJson(raw)
     };
+
   } catch (error) {
-    const status =
-      error?.status;
 
     if (
-      status === 429 &&
+      error?.status === 429 &&
       FALLBACK_MODEL
     ) {
+
       console.warn(
         "Usando modelo fallback."
       );
@@ -319,15 +527,17 @@ async function askGroq(
   }
 }
 
+
 /*
 ==================================================
-CHAT NORMAL
+CONSEJERO
 ==================================================
 */
 
 async function generateAdvisorResponse(
   history
 ) {
+
   const messages = [
     personality,
     stateInstructions,
@@ -337,7 +547,7 @@ async function generateAdvisorResponse(
   const response =
     await askGroq(
       messages,
-      1200
+      1400
     );
 
   if (
@@ -345,6 +555,7 @@ async function generateAdvisorResponse(
     typeof response.parsed.estado !==
       "string"
   ) {
+
     throw new Error(
       "La IA devolvió una respuesta de consejero inválida."
     );
@@ -353,15 +564,131 @@ async function generateAdvisorResponse(
   return response.parsed;
 }
 
+
 /*
 ==================================================
-DIAGNÓSTICO
+DIAGNÓSTICO - PROMPT
 ==================================================
 */
 
-function enrichDiagnosis(
-  diagnosis
-) {
+function diagnosisPrompt(history) {
+
+  return `
+Eres un analista comercial de ciberseguridad.
+
+Tu tarea es identificar oportunidades de protección
+para una empresa a partir de información comercial real.
+
+==================================================
+EVIDENCIA PERMITIDA
+==================================================
+
+Únicamente puedes utilizar:
+
+${evidenceText(history)}
+
+Los mensajes del CONSEJERO no son evidencia.
+
+Las preguntas no son evidencia.
+
+No conviertas una pregunta sin respuesta en un hecho.
+
+==================================================
+OBJETIVO
+==================================================
+
+No necesitas demostrar que existe una vulnerabilidad.
+
+Debes identificar áreas y capas que sea razonable VALIDAR
+considerando la información confirmada de la empresa.
+
+Ejemplo:
+
+Si sabemos que existen más de 1,000 empleados:
+
+CORRECTO:
+"El tamaño de la organización hace relevante validar
+cómo se administran y protegen los equipos."
+
+INCORRECTO:
+"La empresa tiene equipos desprotegidos."
+
+Si sabemos que existen plantas:
+
+CORRECTO:
+"Conviene validar cómo se administran los activos
+tecnológicos entre las diferentes instalaciones."
+
+INCORRECTO:
+"Las plantas tienen problemas de red."
+
+==================================================
+REGLAS
+==================================================
+
+NO inventes:
+
+- vulnerabilidades;
+- ataques;
+- malware;
+- incidentes;
+- fugas;
+- tecnologías;
+- firewalls;
+- VPN;
+- nube;
+- servidores;
+- respaldos;
+- problemas;
+- deficiencias.
+
+Utiliza solamente IDs existentes.
+
+CATÁLOGO:
+
+${getCompactCatalog()}
+
+Máximo 10 celdas.
+
+==================================================
+FORMATO
+==================================================
+
+{
+  "diagnostico": [
+    {
+      "area_id": "ID_EXISTENTE",
+      "capa_id": "ID_EXISTENTE",
+      "prioridad": "alta",
+      "motivo": "Motivo basado en hechos.",
+      "evidencia": "Dato confirmado.",
+      "soluciones": [
+        "ID_EXISTENTE"
+      ]
+    }
+  ],
+  "conclusion": {
+    "resumen": "Resumen breve.",
+    "prioridades": [
+      "Prioridad"
+    ],
+    "siguiente_paso": "Siguiente paso."
+  }
+}
+
+Devuelve únicamente JSON.
+`;
+}
+
+
+/*
+==================================================
+ENRIQUECER DIAGNÓSTICO
+==================================================
+*/
+
+function enrichDiagnosis(diagnosis) {
+
   if (
     !Array.isArray(diagnosis)
   ) {
@@ -379,16 +706,12 @@ function enrichDiagnosis(
     );
 
   const areas =
-    Array.isArray(
-      catalog.areas
-    )
+    Array.isArray(catalog.areas)
       ? catalog.areas
       : [];
 
   const capas =
-    Array.isArray(
-      catalog.capas
-    )
+    Array.isArray(catalog.capas)
       ? catalog.capas
       : [];
 
@@ -424,33 +747,34 @@ function enrichDiagnosis(
 
   const result = [];
 
+  const usedCells =
+    new Set();
+
   for (
     const item of diagnosis
   ) {
+
     if (
       !item ||
-      typeof item !==
-        "object"
+      typeof item !== "object"
     ) {
       continue;
     }
 
-    const areaId =
-      item.area_id ||
-      item.area;
-
-    const capaId =
-      item.capa_id ||
-      item.capa;
-
     const area =
       areaMap.get(
-        normalize(areaId)
+        normalize(
+          item.area_id ||
+          item.area
+        )
       );
 
     const capa =
       capaMap.get(
-        normalize(capaId)
+        normalize(
+          item.capa_id ||
+          item.capa
+        )
       );
 
     if (
@@ -462,6 +786,18 @@ function enrichDiagnosis(
 
     const cell =
       `${area.id}.${capa.id}`;
+
+    if (
+      usedCells.has(
+        normalize(cell)
+      )
+    ) {
+      continue;
+    }
+
+    usedCells.add(
+      normalize(cell)
+    );
 
     const covering =
       solutions.filter(
@@ -486,36 +822,35 @@ function enrichDiagnosis(
     const selected =
       requested
         .map(
-          solutionId =>
-            solutionMap.get(
-              normalize(
-                typeof solutionId ===
-                  "string"
-                  ? solutionId
-                  : solutionId?.id
-              )
-            )
+          solutionId => {
+
+            const id =
+              typeof solutionId === "string"
+                ? solutionId
+                : solutionId?.id;
+
+            return solutionMap.get(
+              normalize(id)
+            );
+          }
         )
         .filter(
           solution =>
             solution &&
             covering.some(
               valid =>
-                normalize(
-                  valid.id
-                ) ===
-                normalize(
-                  solution.id
-                )
+                normalize(valid.id) ===
+                normalize(solution.id)
             )
         );
 
     const finalSolutions =
-      selected.length
+      selected.length > 0
         ? selected
         : covering.slice(0, 3);
 
     result.push({
+
       area:
         area.id,
 
@@ -534,14 +869,19 @@ function enrichDiagnosis(
         ) || "media",
 
       motivo:
-        item.motivo || "",
+        String(
+          item.motivo || ""
+        ).trim(),
 
       evidencia:
-        item.evidencia || "",
+        String(
+          item.evidencia || ""
+        ).trim(),
 
       soluciones:
         finalSolutions.map(
           solution => ({
+
             id:
               solution.id,
 
@@ -549,24 +889,23 @@ function enrichDiagnosis(
               solution.nombre,
 
             categoria:
-              solution.categoria ||
-              "",
+              solution.categoria || "",
 
             descripcion:
-              solution.descripcion ||
-              "",
+              solution.descripcion || "",
 
             necesidad_que_atiende:
-              solution.necesidad_que_atiende ||
-              "",
+              solution.necesidad_que_atiende || "",
 
             que_validar:
-              solution.que_validar ||
-              [],
+              Array.isArray(
+                solution.que_validar
+              )
+                ? solution.que_validar
+                : [],
 
             url:
-              solution.url ||
-              ""
+              solution.url || ""
           })
         )
     });
@@ -575,106 +914,226 @@ function enrichDiagnosis(
   return result;
 }
 
-function diagnosisPrompt(
-  history
-) {
-  return `
-Eres un analista comercial de ciberseguridad.
 
-Debes generar un diagnóstico para el vendedor.
+/*
+==================================================
+FALLBACK DETERMINÍSTICO
+==================================================
 
-El vendedor ha proporcionado información sobre una empresa
-durante una conversación comercial.
+Si Groq no devuelve IDs válidos, el backend todavía
+puede construir oportunidades a partir de evidencia real.
+==================================================
+*/
 
-Tu tarea NO es demostrar que la empresa tiene vulnerabilidades.
+function buildFallbackDiagnosis(history) {
 
-Tu tarea es identificar qué áreas de protección son relevantes
-con base en la información disponible.
+  const evidence =
+    evidenceText(history);
 
-NO inventes:
+  const text =
+    normalize(evidence);
 
-- incidentes;
-- ataques;
-- vulnerabilidades;
-- tecnologías;
-- productos;
-- problemas;
-- IDs.
+  const results = [];
 
-Puedes inferir RELEVANCIA de una protección cuando el contexto
-empresarial la hace razonablemente aplicable.
+  const largeOrganization =
+    text.includes("1000") ||
+    text.includes("1000+") ||
+    text.includes("1,000") ||
+    text.includes("25000") ||
+    text.includes("25,000") ||
+    text.includes("multinacional") ||
+    text.includes("empleados");
 
-IMPORTANTE:
-
-Si existe información suficiente para identificar una necesidad
-general de protección, NO devuelvas un diagnóstico vacío.
-
-Debes seleccionar al menos una celda cuando sea posible.
-
-Utiliza EXCLUSIVAMENTE las celdas del catálogo.
-
-CATÁLOGO:
-
-${getCompactCatalog()}
-
-CONTEXTO COMERCIAL:
-
-${conversationText(history)}
-
-FORMATO OBLIGATORIO:
-
-{
-  "diagnostico": [
-    {
-      "area_id": "ID_EXISTENTE",
-      "capa_id": "ID_EXISTENTE",
-      "prioridad": "alta",
-      "motivo": "Motivo comercial breve.",
-      "evidencia": "Dato del contexto.",
-      "soluciones": [
-        "ID_SOLUCION_EXISTENTE"
-      ]
-    }
-  ],
-  "conclusion": {
-    "resumen": "Resumen breve.",
-    "prioridades": [
-      "Prioridad"
-    ],
-    "siguiente_paso": "Siguiente paso comercial."
-  }
-}
-
-Máximo 10 celdas.
-
-Devuelve únicamente JSON.
-`;
-}
-
-async function generateDiagnosis(
-  history
-) {
-  console.log(
-    "\n===== CONTEXTO COMERCIAL ENVIADO AL DIAGNÓSTICO ====="
-  );
-
-  console.log(
-    conversationText(history)
-  );
-
-  console.log(
-    "===== FIN DEL CONTEXTO COMERCIAL =====\n"
-  );
+  const manufacturing =
+    text.includes("manufactura") ||
+    text.includes("manufacturera") ||
+    text.includes("fabricacion") ||
+    text.includes("fabricación") ||
+    text.includes("planta") ||
+    text.includes("plantas");
 
   /*
+  ----------------------------------------------
+  HOST / ACTIVOS
+  ----------------------------------------------
+  */
+
+  if (largeOrganization) {
+
+    results.push({
+
+      area_id:
+        "host",
+
+      capa_id:
+        "activos",
+
+      prioridad:
+        "alta",
+
+      motivo:
+        "El tamaño de la organización hace relevante validar cómo se administran y protegen los equipos utilizados por los colaboradores.",
+
+      evidencia:
+        findEvidence(
+          history,
+          [
+            "empleados",
+            "25,000",
+            "25.000",
+            "1,000",
+            "1000"
+          ]
+        ),
+
+      soluciones: []
+    });
+  }
+
+
+  /*
+  ----------------------------------------------
+  RED / ACTIVOS
+  ----------------------------------------------
+  */
+
+  if (
+    largeOrganization &&
+    manufacturing
+  ) {
+
+    results.push({
+
+      area_id:
+        "red",
+
+      capa_id:
+        "activos",
+
+      prioridad:
+        "alta",
+
+      motivo:
+        "La operación manufacturera y el tamaño de la organización hacen relevante validar cómo se identifican y administran los activos conectados a la red.",
+
+      evidencia:
+        findEvidence(
+          history,
+          [
+            "planta",
+            "plantas",
+            "manufactura",
+            "manufacturera"
+          ]
+        ),
+
+      soluciones: []
+    });
+  }
+
+
+  /*
+  ----------------------------------------------
+  NO TÉCNICA / BUENAS PRÁCTICAS
+  ----------------------------------------------
+  */
+
+  if (largeOrganization) {
+
+    results.push({
+
+      area_id:
+        "no_tecnica",
+
+      capa_id:
+        "buenas_practicas",
+
+      prioridad:
+        "media",
+
+      motivo:
+        "El tamaño y alcance de la organización hacen relevante validar que existan prácticas y procesos de ciberseguridad establecidos de manera consistente.",
+
+      evidencia:
+        findEvidence(
+          history,
+          [
+            "multinacional",
+            "empleados",
+            "paises",
+            "países"
+          ]
+        ),
+
+      soluciones: []
+    });
+  }
+
+
+  /*
+  ----------------------------------------------
+  SEGURIDAD FÍSICA / ACTIVOS
+  ----------------------------------------------
+  */
+
+  if (manufacturing) {
+
+    results.push({
+
+      area_id:
+        "fisica",
+
+      capa_id:
+        "activos",
+
+      prioridad:
+        "media",
+
+      motivo:
+        "La existencia de plantas de manufactura hace relevante validar cómo se controlan y administran físicamente los activos tecnológicos dentro de las instalaciones.",
+
+      evidencia:
+        findEvidence(
+          history,
+          [
+            "planta",
+            "plantas",
+            "manufactura"
+          ]
+        ),
+
+      soluciones: []
+    });
+  }
+
+
+  return enrichDiagnosis(
+    results
+  );
+}
+
+
+/*
+==================================================
+GENERAR DIAGNÓSTICO
+==================================================
+*/
+
+async function generateDiagnosis(history) {
+
+  /*
+  ================================================
   PRIMER INTENTO
+  ================================================
   */
 
   const first =
     await askGroq(
       [
         {
-          role: "system",
+          role:
+            "system",
+
           content:
             diagnosisPrompt(
               history
@@ -692,30 +1151,38 @@ async function generateDiagnosis(
   if (
     firstDiagnosis.length > 0
   ) {
+
     return {
+
       ...first.parsed,
+
       diagnostico:
         firstDiagnosis
     };
   }
 
   console.warn(
-    "El modelo devolvió JSON válido pero diagnóstico vacío o inválido."
+    "Primer diagnóstico sin celdas válidas."
   );
 
   console.warn(
     first.raw
   );
 
+
   /*
-  SEGUNDO INTENTO.
+  ================================================
+  SEGUNDO INTENTO
+  ================================================
   */
 
   const second =
     await askGroq(
       [
         {
-          role: "system",
+          role:
+            "system",
+
           content:
             diagnosisPrompt(
               history
@@ -723,20 +1190,49 @@ async function generateDiagnosis(
         },
 
         {
-          role: "user",
+          role:
+            "user",
+
           content: `
-La respuesta anterior no produjo ninguna celda válida.
+La respuesta anterior no produjo celdas válidas.
 
-Corrígela.
+Debes devolver CELDAS REALES del catálogo.
 
-Debes seleccionar al menos una celda si existe información
-empresarial suficiente.
+ÁREAS VÁLIDAS:
 
-No respondas que falta información si ya existen datos sobre
-el giro, tamaño, usuarios, sistemas, información, infraestructura,
-sucursales, operación o dependencia tecnológica de la empresa.
+no_tecnica
+fisica
+perimetraje
+red
+host
+aplicacion
+datos
 
-Selecciona solamente IDs existentes en el catálogo.
+CAPAS VÁLIDAS:
+
+activos
+vulnerabilidades
+parches
+malware
+perimetro
+respaldos
+dlp
+buenas_practicas
+
+Ejemplo:
+
+{
+  "area_id": "host",
+  "capa_id": "activos",
+  "prioridad": "media",
+  "motivo": "El tamaño de la organización hace relevante validar cómo se administran los equipos.",
+  "evidencia": "Cuenta con más de 1,000 empleados directos.",
+  "soluciones": []
+}
+
+No inventes vulnerabilidades.
+
+Devuelve al menos una celda si existe información empresarial.
 `
         }
       ],
@@ -751,90 +1247,63 @@ Selecciona solamente IDs existentes en el catálogo.
   if (
     secondDiagnosis.length > 0
   ) {
+
     return {
+
       ...second.parsed,
+
       diagnostico:
         secondDiagnosis
     };
   }
 
+  console.warn(
+    "Segundo diagnóstico sin celdas válidas."
+  );
+
+
   /*
-  TERCER INTENTO:
-  selección directa.
+  ================================================
+  FALLBACK
+  ================================================
   */
 
-  const third =
-    await askGroq(
-      [
-        {
-          role: "system",
-          content: `
-Selecciona áreas de protección de ciberseguridad.
-
-No determines vulnerabilidades.
-
-Determina qué protecciones son pertinentes para la empresa.
-
-Utiliza solamente CELDAS DISPONIBLES.
-
-Debes devolver al menos una celda si existe información empresarial.
-
-CELDAS DISPONIBLES:
-
-${getCompactCatalog()}
-
-FORMATO:
-
-{
-  "diagnostico": [
-    {
-      "area_id": "ID",
-      "capa_id": "ID",
-      "prioridad": "alta",
-      "motivo": "motivo",
-      "evidencia": "evidencia",
-      "soluciones": []
-    }
-  ],
-  "conclusion": {
-    "resumen": "",
-    "prioridades": [],
-    "siguiente_paso": ""
-  }
-}
-`
-        },
-
-        {
-          role: "user",
-          content:
-            conversationText(
-              history
-            )
-        }
-      ],
-      3500
-    );
-
-  const thirdDiagnosis =
-    enrichDiagnosis(
-      third.parsed?.diagnostico
+  const fallback =
+    buildFallbackDiagnosis(
+      history
     );
 
   if (
-    thirdDiagnosis.length > 0
+    fallback.length > 0
   ) {
+
     return {
-      ...third.parsed,
+
       diagnostico:
-        thirdDiagnosis
+        fallback,
+
+      conclusion: {
+
+        resumen:
+          "Con la información disponible se identifican áreas que conviene validar debido al tamaño y características operativas de la organización.",
+
+        prioridades: [
+          "Administración de activos informáticos",
+          "Protección de dispositivos y red",
+          "Mejores prácticas de ciberseguridad"
+        ],
+
+        siguiente_paso:
+          "Validar con el responsable de TI cómo administran actualmente sus activos, dispositivos y controles de seguridad."
+      }
     };
   }
 
   throw new Error(
-    "La IA no pudo generar un diagnóstico con celdas válidas."
+    "No fue posible generar oportunidades con la información disponible."
   );
 }
+
 
 /*
 ==================================================
@@ -846,6 +1315,7 @@ async function generateSolutionAnalysis(
   history,
   diagnosis
 ) {
+
   const solutions =
     loadJson(
       "solutions.json"
@@ -855,10 +1325,14 @@ async function generateSolutionAnalysis(
     ...new Set(
       diagnosis.flatMap(
         item =>
-          item.soluciones.map(
-            solution =>
-              solution.id
+          Array.isArray(
+            item.soluciones
           )
+            ? item.soluciones.map(
+                solution =>
+                  solution.id
+              )
+            : []
       )
     )
   ];
@@ -878,18 +1352,14 @@ async function generateSolutionAnalysis(
     );
 
   const prompt = `
-Analiza las soluciones de ciberseguridad seleccionadas.
+Eres un asesor comercial de ciberseguridad.
 
-Explica brevemente POR QUÉ cada solución es pertinente
-para la empresa según el contexto comercial.
+Explica por qué cada solución seleccionada es pertinente
+para la empresa.
 
-NO inventes problemas.
+DATOS CONFIRMADOS:
 
-NO inventes funcionalidades.
-
-CONTEXTO:
-
-${conversationText(history)}
+${evidenceText(history)}
 
 DIAGNÓSTICO:
 
@@ -907,7 +1377,28 @@ ${JSON.stringify(
   2
 )}
 
-Devuelve:
+REGLAS:
+
+- No inventes problemas.
+- No inventes tecnologías.
+- No inventes incidentes.
+- No digas que una protección es inexistente.
+- No conviertas una oportunidad en una deficiencia confirmada.
+- Basa cada explicación en datos confirmados.
+
+Si solamente existe información suficiente para decir
+que algo debe validarse, utiliza ese enfoque.
+
+Ejemplo correcto:
+
+"El tamaño de la organización hace pertinente validar
+cómo se administran y protegen los equipos."
+
+Ejemplo incorrecto:
+
+"La empresa tiene equipos desprotegidos."
+
+FORMATO:
 
 {
   "soluciones": [
@@ -925,7 +1416,9 @@ JSON válido únicamente.
     await askGroq(
       [
         {
-          role: "system",
+          role:
+            "system",
+
           content:
             prompt
         }
@@ -940,6 +1433,7 @@ JSON válido únicamente.
     : [];
 }
 
+
 /*
 ==================================================
 API CHAT
@@ -952,13 +1446,20 @@ app.post(
     req,
     res
   ) => {
+
     try {
+
       const prompt =
         String(
           req.body?.prompt ??
           req.body?.message ??
           ""
-        ).trim();
+        )
+          .trim()
+          .slice(
+            0,
+            MAX_MESSAGE_LENGTH
+          );
 
       const userId =
         String(
@@ -968,10 +1469,13 @@ app.post(
         );
 
       if (!prompt) {
-        return res.status(400).json({
-          error:
-            "El mensaje está vacío."
-        });
+
+        return res
+          .status(400)
+          .json({
+            error:
+              "El mensaje está vacío."
+          });
       }
 
       if (
@@ -979,6 +1483,7 @@ app.post(
           userId
         )
       ) {
+
         conversations.set(
           userId,
           []
@@ -990,8 +1495,11 @@ app.post(
           userId
         );
 
+
       /*
+      ==============================================
       DIAGNÓSTICO
+      ==============================================
       */
 
       if (
@@ -999,6 +1507,11 @@ app.post(
           prompt
         )
       ) {
+
+        /*
+        El comando NO se agrega al historial.
+        */
+
         const context =
           [...history];
 
@@ -1026,36 +1539,42 @@ app.post(
         const finalDiagnosis =
           diagnosis.diagnostico.map(
             item => ({
+
               ...item,
 
               soluciones:
                 item.soluciones.map(
                   solution => ({
+
                     ...solution,
 
                     por_que_aplica:
                       analysisMap.get(
                         solution.id
-                      ) || ""
+                      ) ||
+                      "La información disponible permite considerar esta solución como una oportunidad a validar; no confirma que exista actualmente una deficiencia."
                   })
                 )
             })
           );
 
+
         /*
-        Guardamos el diagnóstico,
-        pero NO guardamos el comando
-        "haz el análisis" como mensaje
-        del vendedor.
+        Guardar diagnóstico como respuesta
+        del consejero.
         */
 
         history.push({
-          role: "assistant",
+
+          role:
+            "assistant",
 
           content:
             JSON.stringify({
+
               estado:
                 "diagnostico",
+
               diagnostico:
                 finalDiagnosis
             })
@@ -1066,6 +1585,7 @@ app.post(
         );
 
         return res.json({
+
           estado:
             "diagnostico",
 
@@ -1075,25 +1595,32 @@ app.post(
           conclusion:
             diagnosis.conclusion ||
             {
-              resumen: "",
-              prioridades: [],
-              siguiente_paso: ""
+              resumen:
+                "",
+
+              prioridades:
+                [],
+
+              siguiente_paso:
+                ""
             }
         });
       }
 
+
       /*
+      ==============================================
       CONVERSACIÓN NORMAL
+      ==============================================
       */
 
       history.push({
-        role: "user",
+
+        role:
+          "user",
 
         content:
-          prompt.slice(
-            0,
-            MAX_MESSAGE_LENGTH
-          )
+          prompt
       });
 
       trimHistory(
@@ -1106,7 +1633,9 @@ app.post(
         );
 
       history.push({
-        role: "assistant",
+
+        role:
+          "assistant",
 
         content:
           JSON.stringify(
@@ -1123,6 +1652,7 @@ app.post(
       );
 
     } catch (error) {
+
       console.error(
         "Error interacting with GROQ API:"
       );
@@ -1131,14 +1661,18 @@ app.post(
         error
       );
 
-      return res.status(500).json({
-        error:
-          error?.message ||
-          "Error procesando la solicitud."
-      });
+      return res
+        .status(500)
+        .json({
+
+          error:
+            error?.message ||
+            "Error procesando la solicitud."
+        });
     }
   }
 );
+
 
 /*
 ==================================================
@@ -1148,25 +1682,35 @@ CATÁLOGO
 
 app.get(
   "/api/catalog",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
+
     try {
+
       res.json(
         loadJson(
           "catalog.json"
         )
       );
+
     } catch (error) {
+
       console.error(
         error
       );
 
-      res.status(500).json({
-        error:
-          "No se pudo cargar el catálogo."
-      });
+      res
+        .status(500)
+        .json({
+          error:
+            "No se pudo cargar el catálogo."
+        });
     }
   }
 );
+
 
 /*
 ==================================================
@@ -1176,7 +1720,11 @@ RESET
 
 app.post(
   "/api/reset",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
+
     const userId =
       String(
         req.body?.userId ??
@@ -1194,6 +1742,7 @@ app.post(
   }
 );
 
+
 /*
 ==================================================
 FRONTEND FALLBACK
@@ -1202,7 +1751,11 @@ FRONTEND FALLBACK
 
 app.get(
   "/{*splat}",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
+
     res.sendFile(
       path.join(
         frontendPath,
@@ -1211,6 +1764,7 @@ app.get(
     );
   }
 );
+
 
 /*
 ==================================================
@@ -1221,6 +1775,7 @@ SERVER
 app.listen(
   PORT,
   () => {
+
     console.log(
       `Servidor ejecutándose en http://localhost:${PORT}`
     );
