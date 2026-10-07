@@ -1,0 +1,67 @@
+{
+  "areas": [
+    {
+      "id": "no_tecnica",
+      "nombre": "No técnica"
+    },
+    {
+      "id": "fisica",
+      "nombre": "Seguridad física"
+    },
+    {
+      "id": "perimetraje",
+      "nombre": "Perimetraje"
+    },
+    {
+      "id": "red",
+      "nombre": "Red"
+    },
+    {
+      "id": "host",
+      "nombre": "Host / Endpoint"
+    },
+    {
+      "id": "aplicacion",
+      "nombre": "Aplicación"
+    },
+    {
+      "id": "datos",
+      "nombre": "Datos"
+    }
+  ],
+  "capas": [
+    {
+      "id": "activos",
+      "nombre": "Administración de activos informáticos"
+    },
+    {
+      "id": "vulnerabilidades",
+      "nombre": "Administración de vulnerabilidades"
+    },
+    {
+      "id": "parches",
+      "nombre": "Administración de parches"
+    },
+    {
+      "id": "malware",
+      "nombre": "Plan de prevención de malware"
+    },
+    {
+      "id": "perimetro",
+      "nombre": "Protección de perímetro"
+    },
+    {
+      "id": "respaldos",
+      "nombre": "Respaldos de información"
+    },
+    {
+      "id": "dlp",
+      "nombre": "Prevención de fuga de datos"
+    },
+    {
+      "id": "buenas_practicas",
+      "nombre": "Mejores prácticas de ciberseguridad"
+    }
+  ]
+}
+

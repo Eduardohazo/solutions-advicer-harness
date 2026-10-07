@@ -1,0 +1,315 @@
+[
+  {
+    "id": "hornet_asa",
+    "nombre": "Hornet Security Awareness Service",
+    "categoria": "Concientización",
+    "descripcion": "Servicio de concientización que ayuda a los colaboradores a reconocer amenazas y adoptar mejores prácticas de seguridad mediante capacitación y sensibilización.",
+    "url": "https://cerounosoftware.com.mx/hornet-security-awareness-service/",
+    "cubre": [
+      "no_tecnica.malware",
+      "no_tecnica.buenas_practicas"
+    ]
+  },
+  {
+    "id": "paloalto",
+    "nombre": "Palo Alto Networks (NGFW)",
+    "categoria": "Protección de perímetro",
+    "descripcion": "Firewall de nueva generación que ayuda a proteger el perímetro de la organización, controlar el tráfico de red y prevenir amenazas que intenten ingresar o salir de la red.",
+    "url": "https://cerounosoftware.com.mx/palo-alto-networks/",
+    "cubre": [
+      "perimetraje.perimetro",
+      "red.perimetro",
+      "red.malware"
+    ]
+  },
+  {
+    "id": "fortigate",
+    "nombre": "FortiGate (NGFW)",
+    "categoria": "Protección de perímetro",
+    "descripcion": "Firewall de nueva generación que protege la conexión entre la red de la empresa e Internet, ayudando a controlar el tráfico y prevenir amenazas de red.",
+    "url": "https://cerounosoftware.com.mx/fortigate/",
+    "cubre": [
+      "perimetraje.perimetro",
+      "red.perimetro",
+      "red.malware"
+    ]
+  },
+  {
+    "id": "bitdefender",
+    "nombre": "BitDefender GravityZone",
+    "categoria": "Protección de dispositivos / EDR",
+    "descripcion": "Plataforma de protección para computadoras y dispositivos de la organización que ayuda a detectar y prevenir malware y otras amenazas en los equipos.",
+    "url": "https://cerounosoftware.com.mx/bitdefender/",
+    "cubre": [
+      "host.malware",
+      "host.activos"
+    ]
+  },
+  {
+    "id": "kaspersky",
+    "nombre": "Kaspersky Endpoint Security for Business",
+    "categoria": "Protección de dispositivos / EDR",
+    "descripcion": "Solución de protección para los equipos de los colaboradores que ayuda a prevenir amenazas, identificar vulnerabilidades y mantener los dispositivos protegidos.",
+    "url": "https://cerounosoftware.com.mx/kaspersky-endpoint-security-for-bussiness/",
+    "cubre": [
+      "host.malware",
+      "host.parches",
+      "host.vulnerabilidades"
+    ]
+  },
+  {
+    "id": "malwarebytes",
+    "nombre": "Malwarebytes Endpoint Protection (ThreatDown)",
+    "categoria": "Protección de dispositivos / EDR",
+    "descripcion": "Protección para endpoints que ayuda a detectar y bloquear malware y otras amenazas en las computadoras utilizadas por los colaboradores.",
+    "url": "https://cerounosoftware.com.mx/malwarebytes-endpoint-protection/",
+    "cubre": [
+      "host.malware"
+    ]
+  },
+  {
+    "id": "fortiap",
+    "nombre": "FortiAP",
+    "categoria": "Conectividad inalámbrica",
+    "descripcion": "Solución de conectividad inalámbrica empresarial que permite administrar y proteger el acceso Wi-Fi de los usuarios y dispositivos de la organización.",
+    "url": "https://cerounosoftware.com.mx/fortiap/",
+    "cubre": [
+      "red.perimetro",
+      "red.activos"
+    ]
+  },
+  {
+    "id": "ruckus",
+    "nombre": "Ruckus Wireless",
+    "categoria": "Conectividad inalámbrica",
+    "descripcion": "Solución de conectividad inalámbrica empresarial diseñada para proporcionar y administrar redes Wi-Fi para usuarios y dispositivos dentro de la organización.",
+    "url": "https://cerounosoftware.com.mx/ruckus-wireless/",
+    "cubre": [
+      "red.perimetro",
+      "red.activos"
+    ]
+  },
+  {
+    "id": "blancco",
+    "nombre": "Blancco (Borrado seguro)",
+    "categoria": "Borrado seguro",
+    "descripcion": "Solución para eliminar de forma segura la información almacenada en dispositivos antes de reutilizarlos, retirarlos o disponer de ellos, reduciendo el riesgo de exposición de datos.",
+    "url": "https://cerounosoftware.com.mx/blancco/",
+    "cubre": [
+      "datos.dlp",
+      "fisica.dlp",
+      "fisica.activos"
+    ]
+  },
+  {
+    "id": "languard",
+    "nombre": "GFI LanGuard",
+    "categoria": "Vulnerabilidades y parches",
+    "descripcion": "Solución para identificar vulnerabilidades y administrar actualizaciones y parches en equipos y dispositivos de la organización.",
+    "url": "https://cerounosoftware.com.mx/gfi-languard/",
+    "cubre": [
+      "host.vulnerabilidades",
+      "red.vulnerabilidades",
+      "host.parches",
+      "red.parches",
+      "host.activos",
+      "red.activos"
+    ]
+  },
+  {
+    "id": "nessus",
+    "nombre": "Nessus Professional",
+    "categoria": "Detección de vulnerabilidades",
+    "descripcion": "Herramienta para identificar vulnerabilidades de seguridad en equipos, redes, aplicaciones y sistemas, ayudando a priorizar los riesgos que requieren atención.",
+    "url": "https://cerounosoftware.com.mx/nessus-professional/",
+    "cubre": [
+      "red.vulnerabilidades",
+      "host.vulnerabilidades",
+      "aplicacion.vulnerabilidades",
+      "perimetraje.vulnerabilidades"
+    ]
+  },
+  {
+    "id": "fortiweb",
+    "nombre": "FortiWeb (WAF)",
+    "categoria": "Seguridad en aplicaciones web",
+    "descripcion": "Firewall de aplicaciones web que ayuda a proteger sitios y aplicaciones web frente a ataques y amenazas dirigidas contra aplicaciones expuestas a Internet.",
+    "url": "https://cerounosoftware.com.mx/fortiweb/",
+    "cubre": [
+      "aplicacion.perimetro",
+      "aplicacion.malware",
+      "aplicacion.vulnerabilidades"
+    ]
+  },
+  {
+    "id": "fortisiem",
+    "nombre": "FortiSIEM (Monitoreo)",
+    "categoria": "Monitoreo",
+    "descripcion": "Plataforma de monitoreo que centraliza y analiza información de diferentes sistemas y dispositivos para ayudar a detectar eventos y comportamientos relacionados con la seguridad.",
+    "url": "https://cerounosoftware.com.mx/fortisiem/",
+    "cubre": [
+      "red.activos",
+      "red.malware",
+      "host.malware",
+      "red.buenas_practicas"
+    ]
+  },
+  {
+    "id": "veeam",
+    "nombre": "Veeam Backup & Replication",
+    "categoria": "Respaldos",
+    "descripcion": "Solución de respaldo y recuperación que ayuda a proteger la información y los sistemas de la organización ante pérdida de datos, fallas o incidentes.",
+    "url": "https://cerounosoftware.com.mx/veeam-backup-and-replication/",
+    "cubre": [
+      "datos.respaldos",
+      "host.respaldos"
+    ]
+  },
+  {
+    "id": "acronis",
+    "nombre": "Acronis Cyber Protect",
+    "categoria": "Respaldos",
+    "descripcion": "Solución que combina protección de equipos y respaldo de información para ayudar a mantener disponibles los datos y recuperarlos ante incidentes o pérdida de información.",
+    "url": "https://cerounosoftware.com.mx/acronis/",
+    "cubre": [
+      "datos.respaldos",
+      "host.respaldos"
+    ]
+  },
+  {
+    "id": "endpoint_protector",
+    "nombre": "Endpoint Protector (DLP)",
+    "categoria": "Prevención de fuga de información",
+    "descripcion": "Solución de prevención de fuga de información que ayuda a controlar y proteger los datos sensibles cuando son utilizados o transferidos desde los equipos de los colaboradores.",
+    "url": "https://cerounosoftware.com.mx/endpoint-protector/",
+    "cubre": [
+      "host.dlp",
+      "datos.dlp"
+    ]
+  },
+  {
+    "id": "safetica",
+    "nombre": "Safetica (DLP)",
+    "categoria": "Prevención de fuga de información",
+    "descripcion": "Solución de protección de datos que ayuda a identificar, controlar y prevenir la salida no autorizada de información sensible desde los equipos y usuarios de la organización.",
+    "url": "https://cerounosoftware.com.mx/safetica/",
+    "cubre": [
+      "host.dlp",
+      "datos.dlp"
+    ]
+  },
+  {
+    "id": "hornetsec_mail",
+    "nombre": "Hornetsecurity (Seguridad de correo)",
+    "categoria": "Seguridad de correo electrónico",
+    "descripcion": "Solución de seguridad para el correo electrónico que ayuda a detectar y bloquear amenazas que pueden llegar a los usuarios mediante mensajes y archivos maliciosos.",
+    "url": "https://cerounosoftware.com.mx/hornetsecurity/",
+    "cubre": [
+      "perimetraje.malware",
+      "aplicacion.malware"
+    ]
+  },
+  {
+    "id": "dece",
+    "nombre": "DECE Software (Clasificación de datos)",
+    "categoria": "Clasificación de datos",
+    "descripcion": "Solución que ayuda a clasificar la información de acuerdo con su importancia o nivel de sensibilidad, facilitando la aplicación de controles adecuados para protegerla.",
+    "url": "https://cerounosoftware.com.mx/dece-software/",
+    "cubre": [
+      "datos.activos",
+      "datos.dlp"
+    ]
+  },
+  {
+    "id": "svc_av",
+    "nombre": "Servicio: Análisis de vulnerabilidades",
+    "categoria": "Servicio de ciberseguridad",
+    "descripcion": "Servicio que identifica vulnerabilidades de seguridad en los sistemas evaluados y ayuda a conocer cuáles requieren atención para reducir la exposición al riesgo.",
+    "url": "https://cerounosoftware.com.mx/analisis-de-vulnerabilidades/",
+    "cubre": [
+      "red.vulnerabilidades",
+      "host.vulnerabilidades",
+      "aplicacion.vulnerabilidades"
+    ]
+  },
+  {
+    "id": "svc_pentest",
+    "nombre": "Servicio: Pruebas de penetración",
+    "categoria": "Servicio de ciberseguridad",
+    "descripcion": "Servicio que realiza pruebas controladas para identificar y validar posibles formas de acceso no autorizado a sistemas, redes o aplicaciones.",
+    "url": "https://cerounosoftware.com.mx/pruebas-de-penetracion/",
+    "cubre": [
+      "perimetraje.vulnerabilidades",
+      "red.vulnerabilidades",
+      "aplicacion.vulnerabilidades"
+    ]
+  },
+  {
+    "id": "svc_audit_config",
+    "nombre": "Servicio: Auditoría de configuración de herramientas de seguridad",
+    "categoria": "Servicio de ciberseguridad",
+    "descripcion": "Servicio que revisa la configuración de las herramientas de seguridad existentes para identificar configuraciones que podrían mejorarse y verificar que los controles estén correctamente establecidos.",
+    "url": "https://cerounosoftware.com.mx/auditorias-de-configuracion-de-herramientas-de-seguridad/",
+    "cubre": [
+      "perimetraje.buenas_practicas",
+      "host.buenas_practicas",
+      "red.buenas_practicas"
+    ]
+  },
+  {
+    "id": "svc_cloud",
+    "nombre": "Servicio: Auditoría de seguridad para la nube",
+    "categoria": "Servicio de ciberseguridad",
+    "descripcion": "Servicio que evalúa aspectos de seguridad de los recursos y servicios utilizados en la nube para identificar oportunidades de mejora y reducir riesgos.",
+    "url": "https://cerounosoftware.com.mx/auditoria-de-seguridad-para-la-nube/",
+    "cubre": [
+      "aplicacion.buenas_practicas",
+      "datos.buenas_practicas"
+    ]
+  },
+  {
+    "id": "svc_eventos",
+    "nombre": "Servicio: Atención a eventos de seguridad",
+    "categoria": "Servicio de ciberseguridad",
+    "descripcion": "Servicio orientado a atender y analizar eventos de seguridad para ayudar a determinar qué ocurrió y qué acciones pueden tomarse ante un posible incidente.",
+    "url": "https://cerounosoftware.com.mx/atencion-a-eventos-de-seguridad/",
+    "cubre": [
+      "red.malware",
+      "host.malware"
+    ]
+  },
+  {
+    "id": "svc_sgsi",
+    "nombre": "Consultoría: SGSI ISO 27000 / auditoría y riesgos",
+    "categoria": "Consultoría de seguridad de la información",
+    "descripcion": "Servicio de consultoría para establecer o fortalecer un sistema de gestión de seguridad de la información, incluyendo aspectos de riesgos, controles y buenas prácticas.",
+    "url": "https://cerounosoftware.com.mx/implementacion-de-un-sgsi-basado-en-iso-27000/",
+    "cubre": [
+      "no_tecnica.buenas_practicas",
+      "no_tecnica.activos",
+      "fisica.buenas_practicas"
+    ]
+  },
+  {
+    "id": "svc_plan_vuln",
+    "nombre": "Consultoría: Plan de administración de vulnerabilidades",
+    "categoria": "Consultoría de seguridad de la información",
+    "descripcion": "Servicio de consultoría para establecer un proceso organizado para identificar, evaluar, priorizar y dar seguimiento a las vulnerabilidades de la organización.",
+    "url": "https://cerounosoftware.com.mx/plan-de-administracion-de-vulnerabilidades/",
+    "cubre": [
+      "no_tecnica.vulnerabilidades",
+      "no_tecnica.parches"
+    ]
+  },
+  {
+    "id": "svc_capacitacion",
+    "nombre": "Capacitación: plan de sensibilización y cursos",
+    "categoria": "Capacitación",
+    "descripcion": "Programa de capacitación y sensibilización que ayuda a los colaboradores a reconocer riesgos de seguridad y adoptar prácticas más seguras en sus actividades cotidianas.",
+    "url": "https://cerounosoftware.com.mx/plan-de-capacitacion-y-sensibilizacion-de-seguridad-de-la-informacion/",
+    "cubre": [
+      "no_tecnica.buenas_practicas",
+      "no_tecnica.malware"
+    ]
+  }
+]
