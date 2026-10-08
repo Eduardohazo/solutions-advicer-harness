@@ -20,6 +20,10 @@ dotenv.config();
 
 const app = express();
 
+/* =========================================================
+   CONFIGURACIÓN
+========================================================= */
+
 const PORT =
   process.env.PORT || 3000;
 
@@ -37,6 +41,10 @@ const MAX_MESSAGE_LENGTH = 6000;
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
+
+/* =========================================================
+   CORS
+========================================================= */
 
 const allowedOrigins = [
   "http://127.0.0.1:5500",
@@ -77,6 +85,10 @@ app.use(
   })
 );
 
+/* =========================================================
+   MEMORIA DE CONVERSACIONES
+========================================================= */
+
 const conversations = new Map();
 
 /* =========================================================
@@ -106,6 +118,10 @@ function getEvidenceHistory(history) {
 }
 
 function conversationText(history) {
+  if (!Array.isArray(history)) {
+    return "";
+  }
+
   return history
     .map(
       (message, index) => {
@@ -143,11 +159,23 @@ ${message.content}
     .join("\n");
 }
 
+/*
+ * IMPORTANTE:
+ * Esta función modifica el arreglo original y
+ * TAMBIÉN LO DEVUELVE.
+ *
+ * Antes aquí faltaba "return history", lo que
+ * convertía history en undefined.
+ */
 function trimHistory(history) {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
   if (
     history.length <= MAX_HISTORY
   ) {
-    return;
+    return history;
   }
 
   const first =
@@ -164,21 +192,32 @@ function trimHistory(history) {
     first,
     ...recent
   );
+
+  return history;
 }
 
 /* =========================================================
-   JSON
+   PARSER JSON ROBUSTO
 ========================================================= */
 
 function parseAgentJson(text) {
-  if (!text) {
+  if (
+    text === null ||
+    text === undefined
+  ) {
     return null;
   }
 
   let clean =
-    String(text)
-      .trim();
+    String(text).trim();
 
+  if (!clean) {
+    return null;
+  }
+
+  /*
+   * Elimina bloques Markdown.
+   */
   clean = clean
     .replace(
       /^```json\s*/i,
@@ -194,34 +233,70 @@ function parseAgentJson(text) {
     )
     .trim();
 
+  /*
+   * Intento directo.
+   */
   try {
     return JSON.parse(clean);
   } catch {
-    const first =
-      clean.indexOf("{");
+    // Continúa con extracción.
+  }
 
-    const last =
-      clean.lastIndexOf("}");
+  /*
+   * Busca el primer objeto JSON.
+   */
+  const firstObject =
+    clean.indexOf("{");
 
-    if (
-      first === -1 ||
-      last === -1 ||
-      last <= first
-    ) {
-      return null;
-    }
+  const lastObject =
+    clean.lastIndexOf("}");
+
+  if (
+    firstObject !== -1 &&
+    lastObject !== -1 &&
+    lastObject > firstObject
+  ) {
+    const candidate =
+      clean.slice(
+        firstObject,
+        lastObject + 1
+      );
 
     try {
-      return JSON.parse(
-        clean.slice(
-          first,
-          last + 1
-        )
-      );
+      return JSON.parse(candidate);
     } catch {
-      return null;
+      // Continúa.
     }
   }
+
+  /*
+   * También soportamos accidentalmente un array JSON.
+   */
+  const firstArray =
+    clean.indexOf("[");
+
+  const lastArray =
+    clean.lastIndexOf("]");
+
+  if (
+    firstArray !== -1 &&
+    lastArray !== -1 &&
+    lastArray > firstArray
+  ) {
+    const candidate =
+      clean.slice(
+        firstArray,
+        lastArray + 1
+      );
+
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // No fue posible interpretar la respuesta.
+    }
+  }
+
+  return null;
 }
 
 /* =========================================================
@@ -231,22 +306,57 @@ function parseAgentJson(text) {
 function validateAdvisorResponse(data) {
   if (
     !data ||
-    typeof data !== "object"
+    typeof data !== "object" ||
+    Array.isArray(data)
+  ) {
+    return false;
+  }
+
+  const validStates = [
+    "inicio",
+    "descubrimiento",
+    "objecion",
+    "diagnostico"
+  ];
+
+  if (
+    !validStates.includes(
+      data.estado
+    )
   ) {
     return false;
   }
 
   if (
-    ![
-      "inicio",
-      "descubrimiento",
-      "objecion"
-    ].includes(data.estado)
+    data.estado === "inicio" ||
+    data.estado === "descubrimiento"
   ) {
-    return false;
+    return (
+      typeof data.pregunta === "string" &&
+      data.pregunta.trim().length > 0
+    );
   }
 
-  return true;
+  if (
+    data.estado === "objecion"
+  ) {
+    return (
+      typeof data.respuesta_sugerida === "string" &&
+      data.respuesta_sugerida.trim().length > 0 &&
+      typeof data.siguiente_pregunta === "string" &&
+      data.siguiente_pregunta.trim().length > 0
+    );
+  }
+
+  if (
+    data.estado === "diagnostico"
+  ) {
+    return validateDiagnosisResponse(
+      data
+    );
+  }
+
+  return false;
 }
 
 function validateDiagnosisResponse(data) {
@@ -278,67 +388,19 @@ function validateDiagnosisResponse(data) {
     return false;
   }
 
-  return true;
-}
-
-/* =========================================================
-   DETECCIÓN DE DIAGNÓSTICO
-========================================================= */
-
-function isDiagnosisRequest(text) {
-  const value =
-    normalize(text);
-
-  const exactCommands = [
-    "diagnostico",
-    "analisis",
-    "matriz",
-    "haz el analisis",
-    "haz el diagnostico",
-    "genera el analisis",
-    "genera el diagnostico",
-    "analisis completo",
-    "diagnostico completo"
-  ];
-
   if (
-    exactCommands.includes(value)
+    typeof data.conclusion.resumen !== "string"
   ) {
-    return true;
+    return false;
   }
 
-  const phrases = [
-    "haz el analisis",
-    "haz el diagnostico",
-    "genera el analisis",
-    "genera el diagnostico",
-    "haz la matriz",
-    "genera la matriz",
-    "haz el analisis con esto",
-    "haz el diagnostico con esto",
-    "hazlo con esta informacion",
-    "hazlo con la informacion",
-    "hazlo con lo que tenemos",
-    "hazlo con lo que te di",
-    "hazlo con lo anterior",
-    "ya con eso",
-    "con eso es suficiente",
-    "con eso puedes hacerlo",
-    "ya puedes hacerlo",
-    "puedes hacerlo con eso",
-    "trata de hacerlo",
-    "trata de hacerlo con lo que tenemos",
-    "genera el diagnostico con esto",
-    "genera el analisis con esto",
-    "genera el diagnostico con la informacion",
-    "genera el analisis con la informacion",
-    "ya tenemos suficiente informacion"
-  ];
+  if (
+    typeof data.conclusion.siguiente_paso !== "string"
+  ) {
+    return false;
+  }
 
-  return phrases.some(
-    phrase =>
-      value.includes(phrase)
-  );
+  return true;
 }
 
 /* =========================================================
@@ -358,6 +420,9 @@ async function callGroq(
       maxTokens
   };
 
+  /*
+   * GPT-OSS utiliza reasoning_effort.
+   */
   if (
     model.startsWith(
       "openai/gpt-oss"
@@ -372,85 +437,140 @@ async function callGroq(
   );
 }
 
+function extractGroqContent(response) {
+  const message =
+    response?.choices?.[0]?.message;
+
+  if (!message) {
+    return "";
+  }
+
+  /*
+   * Normalmente usamos content.
+   */
+  if (
+    typeof message.content === "string"
+  ) {
+    return message.content;
+  }
+
+  /*
+   * Algunas respuestas pueden entregar
+   * contenido en estructuras diferentes.
+   */
+  if (
+    Array.isArray(message.content)
+  ) {
+    return message.content
+      .map(item => {
+        if (
+          typeof item === "string"
+        ) {
+          return item;
+        }
+
+        if (
+          item &&
+          typeof item.text === "string"
+        ) {
+          return item.text;
+        }
+
+        return "";
+      })
+      .join("");
+  }
+
+  return "";
+}
+
+async function requestModel(
+  model,
+  messages,
+  maxTokens
+) {
+  const response =
+    await callGroq(
+      model,
+      messages,
+      maxTokens
+    );
+
+  const raw =
+    extractGroqContent(
+      response
+    );
+
+  if (!raw) {
+    console.error(
+      `El modelo ${model} no devolvió contenido.`
+    );
+
+    console.error(
+      JSON.stringify(
+        response,
+        null,
+        2
+      )
+    );
+
+    throw new Error(
+      "El modelo no devolvió contenido."
+    );
+  }
+
+  const parsed =
+    parseAgentJson(raw);
+
+  if (!parsed) {
+    console.error(
+      `Respuesta RAW de ${model}:`
+    );
+
+    console.error(raw);
+
+    throw new Error(
+      "La IA no devolvió JSON válido."
+    );
+  }
+
+  return {
+    raw,
+    parsed
+  };
+}
+
 async function askGroq(
   messages,
   maxTokens = 1500
 ) {
   try {
-    const response =
-      await callGroq(
-        PRIMARY_MODEL,
-        messages,
-        maxTokens
-      );
-
-    const raw =
-      response?.choices?.[0]
-        ?.message
-        ?.content || "";
-
-    const parsed =
-      parseAgentJson(raw);
-
-    if (!parsed) {
-      console.error(
-        "Respuesta RAW de Groq:"
-      );
-
-      console.error(raw);
-
-      throw new Error(
-        "La IA no devolvió JSON válido."
-      );
-    }
-
-    return {
-      raw,
-      parsed
-    };
+    return await requestModel(
+      PRIMARY_MODEL,
+      messages,
+      maxTokens
+    );
 
   } catch (error) {
 
+    /*
+     * Fallback para rate limit.
+     */
     if (
       error?.status === 429 &&
       FALLBACK_MODEL &&
       FALLBACK_MODEL !== PRIMARY_MODEL
     ) {
       console.warn(
-        "Usando modelo fallback por rate limit."
+        "Modelo principal en rate limit. Usando fallback:",
+        FALLBACK_MODEL
       );
 
-      const response =
-        await callGroq(
-          FALLBACK_MODEL,
-          messages,
-          maxTokens
-        );
-
-      const raw =
-        response?.choices?.[0]
-          ?.message
-          ?.content || "";
-
-      const parsed =
-        parseAgentJson(raw);
-
-      if (!parsed) {
-        console.error(
-          "Respuesta RAW del fallback:"
-        );
-
-        console.error(raw);
-
-        throw new Error(
-          "El modelo fallback no devolvió JSON válido."
-        );
-      }
-
-      return {
-        raw,
-        parsed
-      };
+      return await requestModel(
+        FALLBACK_MODEL,
+        messages,
+        maxTokens
+      );
     }
 
     throw error;
@@ -464,8 +584,20 @@ async function askGroq(
 async function generateAdvisorResponse(
   history
 ) {
+  /*
+   * Protección adicional.
+   * Nunca permitimos que esta función reciba
+   * undefined.
+   */
+  if (!Array.isArray(history)) {
+    history = [];
+  }
+
   const catalog =
     getCompactCatalogAndSolutions();
+
+  const isFirstInteraction =
+    history.length === 1;
 
   const prompt = `
 ${stateInstructions.content}
@@ -473,42 +605,129 @@ ${stateInstructions.content}
 ${catalog}
 
 INFORMACIÓN DE LA CONVERSACIÓN:
-
 ${conversationText(history)}
 
 DATOS CONFIRMADOS DEL VENDEDOR:
-
 ${evidenceText(history)}
 
-GENERA LA SIGUIENTE RESPUESTA.
+--------------------------------------------------
+DECISIÓN DEL ESTADO
+--------------------------------------------------
 
-Si es la primera interacción:
-{
-  "estado": "inicio",
-  "pregunta": "Dame un resumen de la empresa y de cómo opera."
-}
+Debes decidir el estado correcto utilizando
+el contexto completo de la conversación.
 
-Si corresponde continuar descubrimiento:
+Los estados posibles son:
+
+- inicio
+- descubrimiento
+- objecion
+- diagnostico
+
+NO dependas de una palabra específica para decidir
+el estado.
+
+Analiza la intención y el contexto completo.
+
+--------------------------------------------------
+SI DEBES CONTINUAR DESCUBRIMIENTO
+--------------------------------------------------
+
+Devuelve:
+
 {
   "estado": "descubrimiento",
-  "pregunta": "..."
+  "pregunta": "UNA sola pregunta concreta"
 }
 
-Si existe una objeción:
+La pregunta debe depender de la información
+que ya proporcionó el vendedor.
+
+No repitas preguntas ya realizadas.
+
+La pregunta debe ayudar a descubrir información
+relevante para posteriormente recomendar soluciones.
+
+--------------------------------------------------
+SI EXISTE UNA OBJECIÓN
+--------------------------------------------------
+
+Devuelve:
+
 {
   "estado": "objecion",
-  "respuesta_sugerida": "...",
-  "siguiente_pregunta": "..."
+  "respuesta_sugerida": "Respuesta breve y consultiva",
+  "siguiente_pregunta": "UNA sola pregunta concreta"
 }
 
-RECUERDA:
+La respuesta debe:
 
-- solamente una pregunta;
-- no productos;
-- no inventes datos;
-- JSON válido;
-- sin Markdown;
-- sin texto fuera del JSON.
+- reconocer la posición del prospecto;
+- evitar confrontarlo;
+- no intentar vender inmediatamente;
+- buscar abrir una oportunidad de conversación;
+- no asumir que el proveedor actual es malo;
+- no inventar problemas.
+
+--------------------------------------------------
+SI DEBES GENERAR DIAGNÓSTICO
+--------------------------------------------------
+
+NO hagas otra pregunta.
+
+Devuelve:
+
+{
+  "estado": "diagnostico",
+  "diagnostico": [
+    {
+      "area_id": "ID_AREA",
+      "capa_id": "ID_CAPA",
+      "prioridad": "alta",
+      "motivo": "Explicación breve",
+      "evidencia": "Información proporcionada por el vendedor o indicación de que debe validarse",
+      "soluciones": ["ID_SOLUCION"]
+    }
+  ],
+  "conclusion": {
+    "resumen": "Resumen ejecutivo",
+    "siguiente_paso": "Siguiente paso comercial"
+  }
+}
+
+REGLAS DEL DIAGNÓSTICO:
+
+- Utiliza únicamente IDs existentes en el catálogo.
+- Utiliza únicamente combinaciones válidas de area_id + capa_id.
+- Utiliza únicamente soluciones compatibles con esa combinación.
+- No inventes vulnerabilidades.
+- No inventes incidentes.
+- No inventes incumplimientos.
+- Si falta evidencia, indica que debe validarse.
+- Puede existir una oportunidad potencial aunque no exista evidencia
+  de una deficiencia.
+- Cada oportunidad debe tener su propia prioridad.
+- No generes prioridades globales.
+- No hagas preguntas.
+- No escribas nombres de productos dentro de "soluciones".
+- "soluciones" debe contener únicamente IDs.
+- Si existen varias oportunidades relevantes, puedes incluir varias.
+- Si la evidencia es limitada, genera oportunidades potenciales
+  pero deja claro que deben validarse.
+- Siempre intenta identificar al menos una oportunidad razonable
+  cuando el contexto permita hacerlo.
+- No fuerces una solución que no tenga relación con la evidencia.
+
+--------------------------------------------------
+REGLAS GENERALES
+--------------------------------------------------
+
+- Devuelve únicamente JSON.
+- No Markdown.
+- No texto antes del JSON.
+- No texto después del JSON.
+- No razonamiento.
+- No inventes información.
 `;
 
   const result =
@@ -520,14 +739,38 @@ RECUERDA:
           content: prompt
         }
       ],
-      1200
+      2200
     );
+
+  console.log(
+    "RESPUESTA PARSEADA DEL CONSEJERO:"
+  );
+
+  console.log(
+    JSON.stringify(
+      result.parsed,
+      null,
+      2
+    )
+  );
 
   if (
     !validateAdvisorResponse(
       result.parsed
     )
   ) {
+    console.error(
+      "RESPUESTA INVÁLIDA DEL CONSEJERO:"
+    );
+
+    console.error(
+      JSON.stringify(
+        result.parsed,
+        null,
+        2
+      )
+    );
+
     throw new Error(
       "La respuesta del asesor no tiene un formato válido."
     );
@@ -537,146 +780,41 @@ RECUERDA:
 }
 
 /* =========================================================
-   DIAGNÓSTICO
-========================================================= */
-
-function diagnosisPrompt(
-  history
-) {
-  const catalog =
-    getCompactCatalogAndSolutions();
-
-  return `
-${stateInstructions.content}
-
-${catalog}
-
-DATOS CONFIRMADOS DEL VENDEDOR:
-
-${evidenceText(history)}
-
-CONTEXTO COMPLETO:
-
-${conversationText(history)}
-
-GENERA EL DIAGNÓSTICO.
-
-Debes devolver exactamente esta estructura:
-
-{
-  "estado": "diagnostico",
-  "diagnostico": [
-    {
-      "area_id": "ID_AREA",
-      "capa_id": "ID_CAPA",
-      "prioridad": "alta",
-      "motivo": "Explicación breve",
-      "evidencia": "Información que proporcionó el vendedor o indicación de que debe validarse",
-      "soluciones": [
-        "ID_SOLUCION"
-      ]
-    }
-  ],
-  "conclusion": {
-    "resumen": "Resumen ejecutivo",
-    "siguiente_paso": "Siguiente paso comercial"
-  }
-}
-
-REGLAS:
-
-1. Usa solamente IDs existentes en el catálogo.
-
-2. "area_id" debe ser un ID existente.
-
-3. "capa_id" debe ser un ID existente.
-
-4. "prioridad" solamente puede ser:
-   "alta", "media" o "baja".
-
-5. "soluciones" solamente contiene IDs.
-
-6. Nunca pongas nombres de productos en "soluciones".
-
-7. Nunca pongas Markdown en "soluciones".
-
-8. Nunca pongas barras verticales en "soluciones".
-
-9. Nunca pongas comas dentro de un mismo ID.
-
-10. Cada oportunidad debe corresponder a una combinación
-    válida de área + capa.
-
-11. Una solución solamente puede seleccionarse si el catálogo
-    indica que cubre esa combinación.
-
-12. No afirmes vulnerabilidades no confirmadas.
-
-13. Si existe poca información, puedes generar oportunidades
-    potenciales que deban validarse.
-
-14. No generes "prioridades" dentro de "conclusion".
-
-15. No generes ninguna sección global de prioridades.
-
-16. No hagas preguntas.
-
-17. No escribas nada fuera del JSON.
-
-18. Devuelve JSON válido.
-`;
-}
-
-async function generateDiagnosis(
-  history
-) {
-  const result =
-    await askGroq(
-      [
-        personality,
-        {
-          role: "user",
-          content:
-            diagnosisPrompt(history)
-        }
-      ],
-      2200
-    );
-
-  if (
-    !validateDiagnosisResponse(
-      result.parsed
-    )
-  ) {
-    throw new Error(
-      "El diagnóstico no tiene un formato válido."
-    );
-  }
-
-  return result.parsed;
-}
-
-/* =========================================================
-   ENRIQUECIMIENTO
+   ENRIQUECIMIENTO DEL DIAGNÓSTICO
 ========================================================= */
 
 function enrichDiagnosis(
   diagnosis
 ) {
   const catalog =
-    loadJson("catalog.json");
+    loadJson(
+      "catalog.json"
+    );
 
-  const solutions =
-    loadJson("solutions.json");
+  const solutionsData =
+    loadJson(
+      "solutions.json"
+    );
 
   const areas =
-    Array.isArray(catalog.areas)
+    Array.isArray(
+      catalog?.areas
+    )
       ? catalog.areas
       : [];
 
   const capas =
-    Array.isArray(catalog.capas)
+    Array.isArray(
+      catalog?.capas
+    )
       ? catalog.capas
+      : [];
+
+  const solutions =
+    Array.isArray(
+      solutionsData
+    )
+      ? solutionsData
       : [];
 
   const solutionMap =
@@ -711,9 +849,16 @@ function enrichDiagnosis(
 
   const result = [];
 
+  const diagnosisItems =
+    Array.isArray(
+      diagnosis?.diagnostico
+    )
+      ? diagnosis.diagnostico
+      : [];
+
   for (
     const item
-    of diagnosis.diagnostico
+    of diagnosisItems
   ) {
     if (
       !item ||
@@ -732,7 +877,10 @@ function enrichDiagnosis(
         item.capa_id
       );
 
-    if (!area || !capa) {
+    if (
+      !area ||
+      !capa
+    ) {
       continue;
     }
 
@@ -743,7 +891,7 @@ function enrichDiagnosis(
       solutions.filter(
         solution =>
           Array.isArray(
-            solution.cubre
+            solution?.cubre
           ) &&
           solution.cubre.includes(
             cellId
@@ -833,10 +981,14 @@ function enrichDiagnosis(
         ),
 
       motivo:
-        item.motivo || "",
+        typeof item.motivo === "string"
+          ? item.motivo
+          : "",
 
       evidencia:
-        item.evidencia || "",
+        typeof item.evidencia === "string"
+          ? item.evidencia
+          : "",
 
       soluciones:
         enrichedSolutions
@@ -857,8 +1009,10 @@ function normalizePriorityForServer(
       "alta",
       "high",
       "critica",
-      "critica"
-    ].includes(normalized)
+      "critical"
+    ].includes(
+      normalized
+    )
   ) {
     return "alta";
   }
@@ -867,7 +1021,9 @@ function normalizePriorityForServer(
     [
       "media",
       "medium"
-    ].includes(normalized)
+    ].includes(
+      normalized
+    )
   ) {
     return "media";
   }
@@ -876,7 +1032,9 @@ function normalizePriorityForServer(
     [
       "baja",
       "low"
-    ].includes(normalized)
+    ].includes(
+      normalized
+    )
   ) {
     return "baja";
   }
@@ -885,37 +1043,55 @@ function normalizePriorityForServer(
 }
 
 /* =========================================================
-   ANÁLISIS DE SOLUCIONES
+   ANÁLISIS COMERCIAL DE SOLUCIONES
 ========================================================= */
 
 async function generateSolutionAnalysis(
   diagnosis
 ) {
+  if (!Array.isArray(diagnosis)) {
+    return [];
+  }
+
   for (
     const item
     of diagnosis
   ) {
+    if (
+      !Array.isArray(
+        item?.soluciones
+      )
+    ) {
+      continue;
+    }
+
     for (
       const solution
-      of item.soluciones || []
+      of item.soluciones
     ) {
       const prompt = `
 Analiza la aplicación comercial de esta solución.
 
-EMPRESA / CONTEXTO:
+CONTEXTO / EVIDENCIA:
 ${item.evidencia || "No existe evidencia directa suficiente."}
 
 MOTIVO:
 ${item.motivo || ""}
 
+ÁREA:
+${item.area_nombre || ""}
+
+CAPA:
+${item.capa_nombre || ""}
+
 SOLUCIÓN:
-${solution.nombre}
+${solution.nombre || ""}
 
 DESCRIPCIÓN:
-${solution.descripcion}
+${solution.descripcion || ""}
 
 NECESIDAD:
-${solution.necesidad_que_atiende}
+${solution.necesidad_que_atiende || ""}
 
 Responde solamente:
 
@@ -923,9 +1099,14 @@ Responde solamente:
   "por_que_aplica": "Explicación breve y consultiva"
 }
 
-No inventes información.
-Si la evidencia es insuficiente, indica que debe validarse.
-Devuelve únicamente JSON válido.
+REGLAS:
+
+- No inventes información.
+- No afirmes que existe una vulnerabilidad si no hay evidencia.
+- Si la evidencia es insuficiente, indica que debe validarse.
+- Explica por qué la solución podría ser relevante comercialmente.
+- Sé breve.
+- Devuelve únicamente JSON válido.
 `;
 
       try {
@@ -942,18 +1123,21 @@ Devuelve únicamente JSON válido.
           );
 
         if (
-          result.parsed &&
+          result?.parsed &&
           typeof result.parsed.por_que_aplica ===
-            "string"
+          "string"
         ) {
           solution.por_que_aplica =
             result.parsed.por_que_aplica;
+        } else {
+          solution.por_que_aplica =
+            "Conviene validar esta solución con el prospecto para confirmar su aplicabilidad.";
         }
 
       } catch (error) {
         console.error(
           "Error analizando solución:",
-          error.message
+          error?.message || error
         );
 
         solution.por_que_aplica =
@@ -973,32 +1157,47 @@ app.post(
   "/api/chat",
   async (req, res) => {
     try {
-      const userId =
-        String(
-          req.body?.userId || ""
-        ).trim();
+      const {
+        userId,
+        prompt
+      } = req.body || {};
 
-      const prompt =
-        String(
-          req.body?.prompt || ""
-        ).trim();
+      /* -----------------------------------------------------
+         VALIDACIÓN
+      ----------------------------------------------------- */
 
-      if (!userId) {
+      if (
+        !userId ||
+        typeof userId !== "string"
+      ) {
         return res.status(400).json({
           error:
-            "Falta userId."
-        });
-      }
-
-      if (!prompt) {
-        return res.status(400).json({
-          error:
-            "Falta prompt."
+            "userId es requerido."
         });
       }
 
       if (
-        prompt.length >
+        !prompt ||
+        typeof prompt !== "string"
+      ) {
+        return res.status(400).json({
+          error:
+            "prompt es requerido."
+        });
+      }
+
+      const cleanPrompt =
+        prompt.trim();
+
+      if (!cleanPrompt) {
+        return res.status(400).json({
+          error:
+            "El mensaje no puede estar vacío."
+        });
+      }
+
+      if (
+        cleanPrompt.length >
         MAX_MESSAGE_LENGTH
       ) {
         return res.status(400).json({
@@ -1007,94 +1206,119 @@ app.post(
         });
       }
 
+      /* -----------------------------------------------------
+         OBTENER CONVERSACIÓN
+      ----------------------------------------------------- */
+
       let history =
-        conversations.get(userId);
-
-      if (!history) {
-        history = [];
-
-        conversations.set(
-          userId,
-          history
+        conversations.get(
+          userId
         );
-      }
-
-      /* ===============================================
-         DIAGNÓSTICO
-      =============================================== */
 
       if (
-        isDiagnosisRequest(prompt)
+        !Array.isArray(history)
       ) {
-        const diagnosisHistory =
-          [...history];
-
-        const diagnosis =
-          await generateDiagnosis(
-            diagnosisHistory
-          );
-
-        const enriched =
-          enrichDiagnosis(
-            diagnosis
-          );
-
-        const analyzed =
-          await generateSolutionAnalysis(
-            enriched
-          );
-
-        history.push({
-          role: "assistant",
-          content: JSON.stringify({
-            estado:
-              "diagnostico",
-
-            diagnostico:
-              analyzed,
-
-            conclusion:
-              diagnosis.conclusion
-          })
-        });
-
-        trimHistory(history);
-
-        return res.json({
-          estado:
-            "diagnostico",
-
-          diagnostico:
-            analyzed,
-
-          conclusion:
-            diagnosis.conclusion
-        });
+        history = [];
       }
 
-      /* ===============================================
-         MENSAJE NORMAL
-      =============================================== */
+      /* -----------------------------------------------------
+         AGREGAR MENSAJE DEL VENDEDOR
+      ----------------------------------------------------- */
 
       history.push({
         role: "user",
-        content: prompt
+        content: cleanPrompt
       });
 
-      trimHistory(history);
+      /*
+       * IMPORTANTE:
+       * trimHistory devuelve el arreglo.
+       */
+      history =
+        trimHistory(history);
+
+      /* -----------------------------------------------------
+         GENERAR RESPUESTA
+      ----------------------------------------------------- */
 
       const response =
         await generateAdvisorResponse(
           history
         );
 
+      /* -----------------------------------------------------
+         DIAGNÓSTICO
+      ----------------------------------------------------- */
+
+      if (
+        response.estado ===
+        "diagnostico"
+      ) {
+        const enrichedDiagnosis =
+          enrichDiagnosis(
+            response
+          );
+
+        const analyzedDiagnosis =
+          await generateSolutionAnalysis(
+            enrichedDiagnosis
+          );
+
+        const finalResponse = {
+          estado:
+            "diagnostico",
+
+          diagnostico:
+            analyzedDiagnosis,
+
+          conclusion:
+            response.conclusion
+        };
+
+        history.push({
+          role: "assistant",
+          content:
+            JSON.stringify(
+              finalResponse
+            )
+        });
+
+        history =
+          trimHistory(
+            history
+          );
+
+        conversations.set(
+          userId,
+          history
+        );
+
+        return res.json(
+          finalResponse
+        );
+      }
+
+      /* -----------------------------------------------------
+         RESPUESTA NORMAL
+      ----------------------------------------------------- */
+
       history.push({
         role: "assistant",
         content:
-          JSON.stringify(response)
+          JSON.stringify(
+            response
+          )
       });
 
-      trimHistory(history);
+      history =
+        trimHistory(
+          history
+        );
+
+      conversations.set(
+        userId,
+        history
+      );
 
       return res.json(
         response
@@ -1106,25 +1330,13 @@ app.post(
       );
 
       console.error(
+        error?.stack ||
         error
       );
 
-      const status =
-        Number.isInteger(
-          error?.status
-        )
-          ? error.status
-          : 500;
-
-      return res.status(
-        status >= 400 &&
-        status < 600
-          ? status
-          : 500
-      ).json({
+      return res.status(500).json({
         error:
-          error?.message ||
-          "Error interno del servidor."
+          "No fue posible procesar la conversación."
       });
     }
   }
@@ -1143,17 +1355,17 @@ app.get(
           "catalog.json"
         );
 
-      res.json({
+      return res.json({
         areas:
           Array.isArray(
-            catalog.areas
+            catalog?.areas
           )
             ? catalog.areas
             : [],
 
         capas:
           Array.isArray(
-            catalog.capas
+            catalog?.capas
           )
             ? catalog.capas
             : []
@@ -1161,10 +1373,11 @@ app.get(
 
     } catch (error) {
       console.error(
+        "Error cargando catálogo:",
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         error:
           "No se pudo cargar el catálogo."
       });
@@ -1190,24 +1403,51 @@ app.post(
       );
     }
 
-    res.json({
+    return res.json({
       ok: true
     });
   }
 );
 
 /* =========================================================
-   HEALTH
+   HEALTH CHECK
 ========================================================= */
 
 app.get(
   "/",
   (req, res) => {
-    res.json({
+    return res.json({
       ok: true,
       service:
-        "Consejero Cero Uno API"
+        "Consejero Cero Uno API",
+      model:
+        PRIMARY_MODEL
     });
+  }
+);
+
+/* =========================================================
+   MANEJO BÁSICO DE ERRORES DE CORS
+========================================================= */
+
+app.use(
+  (
+    error,
+    req,
+    res,
+    next
+  ) => {
+    if (
+      error?.message ===
+      "Not allowed by CORS"
+    ) {
+      return res.status(403).json({
+        error:
+          "Origen no permitido por CORS."
+      });
+    }
+
+    return next(error);
   }
 );
 
