@@ -1,0 +1,156 @@
+{
+  "cc2bb9a9-3284-40c8-838f-9df939e9e4c7": [
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"descubrimiento\",\"pregunta\":\"¿Cuál es el sector o industria en la que opera la empresa prospecto?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Entiendo, a veces es complicado compartir detalles en una primera conversación.\",\"siguiente_pregunta\":\"¿Hay algún aspecto específico que le impida proporcionar información en este momento?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Comprendo que pueda resultar incómodo compartir datos en este momento.\",\"siguiente_pregunta\":\"¿Qué información le resultaría más útil para decidir si vale la pena profundizar en la conversación?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Comprendo que pueda resultar incómodo compartir datos en este momento.\",\"siguiente_pregunta\":\"¿Qué le ayudaría a sentirse más cómodo para compartir información clave sobre su entorno?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Entiendo que pueda resultar incómodo compartir información en este momento.\",\"siguiente_pregunta\":\"¿Qué le haría sentir más seguro para compartir algunos detalles clave sobre su entorno?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Entiendo que pueda ser un momento complicado para compartir detalles.\",\"siguiente_pregunta\":\"¿Hay alguna preocupación específica que le impida profundizar en la conversación ahora?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Comprendo que prefiera no entrar en detalles ahora.\",\"siguiente_pregunta\":\"¿Qué le ayudaría a sentirse más cómodo para compartir alguna información básica sobre su entorno?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Comprendo que pueda resultar incómodo compartir información ahora.\",\"siguiente_pregunta\":\"¿Qué le haría sentir más seguro para avanzar en esta conversación?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Entiendo que ahora no sea el mejor momento para compartir detalles.\",\"siguiente_pregunta\":\"¿Le parece si retomamos la conversación en otra ocasión más conveniente?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Comprendo que ahora no sea el mejor momento para compartir detalles.\",\"siguiente_pregunta\":\"¿Le parece si coordinamos una breve llamada en otro momento que le resulte más conveniente?\"}"
+    }
+  ],
+  "f4159510-860a-42c7-9b68-3f90c09ac73d": [
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"descubrimiento\",\"pregunta\":\"¿En qué sector o industria opera su empresa?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Entiendo, a veces es complicado compartir detalles en una primera toma de contacto.\",\"siguiente_pregunta\":\"¿Hay algún motivo específico por el que prefiera no proporcionar información en este momento?\"}"
+    },
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"objecion\",\"respuesta_sugerida\":\"Comprendo que pueda resultar incómodo compartir datos en este momento.\",\"siguiente_pregunta\":\"¿Qué información le resultaría más útil para que podamos avanzar en la conversación?\"}"
+    }
+  ],
+  "d32e120f-77a5-4860-a16a-e8ac494db3e0": [
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"descubrimiento\",\"pregunta\":\"¿En qué sector o industria opera su empresa?\"}"
+    }
+  ],
+  "20a3db64-8a11-407d-a8f5-765152c87df7": [
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"descubrimiento\",\"pregunta\":\"¿En qué sector o industria opera la empresa prospecto?\"}"
+    }
+  ],
+  "daf9fd19-863e-4b45-9814-854b7b59350d": [
+    {
+      "role": "user",
+      "content": "hey"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"descubrimiento\",\"pregunta\":\"¿Cuál es el sector o industria en la que opera la empresa prospecto?\"}"
+    },
+    {
+      "role": "user",
+      "content": "empresa de sandalias 150 empleados"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"descubrimiento\",\"pregunta\":\"¿Cuántas sucursales o plantas tiene la empresa y dónde están ubicadas?\"}"
+    },
+    {
+      "role": "user",
+      "content": "Ha zel analisis asi con lo que tienes"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"estado\":\"diagnostico\",\"diagnostico\":[{\"area_id\":\"host\",\"area_nombre\":\"Host / Endpoint\",\"capa_id\":\"activos\",\"capa_nombre\":\"Administración de activos informáticos\",\"prioridad\":\"media\",\"motivo\":\"Con 150 empleados es probable que la empresa tenga una cantidad significativa de endpoints que requieren gestión de activos.\",\"evidencia\":\"150 empleados confirmados\",\"soluciones\":[{\"id\":\"languard\",\"nombre\":\"GFI LanGuard\",\"categoria\":\"Vulnerabilidades y parches\",\"descripcion\":\"Solución para identificar vulnerabilidades y administrar actualizaciones y parches en equipos y dispositivos de la organización.\",\"necesidad_que_atiende\":\"\",\"que_validar\":[],\"url\":\"https://cerounosoftware.com.mx/gfi-languard/\",\"por_que_aplica\":\"Con 150 empleados, la empresa probablemente maneje muchos endpoints; GFI LanGuard puede ayudar a identificar vulnerabilidades y gestionar parches de forma centralizada, reduciendo riesgos y simplificando la administración de activos.\"}]},{\"area_id\":\"host\",\"area_nombre\":\"Host / Endpoint\",\"capa_id\":\"malware\",\"capa_nombre\":\"Plan de prevención de malware\",\"prioridad\":\"media\",\"motivo\":\"Una organización de este tamaño necesita protección contra malware en sus endpoints.\",\"evidencia\":\"150 empleados confirmados\",\"soluciones\":[{\"id\":\"bitdefender\",\"nombre\":\"BitDefender GravityZone\",\"categoria\":\"Protección de dispositivos / EDR\",\"descripcion\":\"Plataforma de protección para computadoras y dispositivos de la organización que ayuda a detectar y prevenir malware y otras amenazas en los equipos.\",\"necesidad_que_atiende\":\"\",\"que_validar\":[],\"url\":\"https://cerounosoftware.com.mx/bitdefender/\",\"por_que_aplica\":\"Con 150 empleados, la organización tiene un número significativo de endpoints que requieren una defensa centralizada y eficaz contra malware; BitDefender GravityZone ofrece una plataforma de prevención de malware que puede cubrir todos los dispositivos, reduciendo riesgos y simplificando la gestión de seguridad.\"}]},{\"area_id\":\"datos\",\"area_nombre\":\"Datos\",\"capa_id\":\"dlp\",\"capa_nombre\":\"Prevención de fuga de datos\",\"prioridad\":\"baja\",\"motivo\":\"Es conveniente validar la necesidad de prevención de fuga de datos dada la posible información de clientes y diseños de productos.\",\"evidencia\":\"Debe confirmarse la existencia de datos sensibles\",\"soluciones\":[{\"id\":\"endpoint_protector\",\"nombre\":\"Endpoint Protector (DLP)\",\"categoria\":\"Prevención de fuga de información\",\"descripcion\":\"Solución de prevención de fuga de información que ayuda a controlar y proteger los datos sensibles cuando son utilizados o transferidos desde los equipos de los colaboradores.\",\"necesidad_que_atiende\":\"\",\"que_validar\":[],\"url\":\"https://cerounosoftware.com.mx/endpoint-protector/\",\"por_que_aplica\":\"Si la empresa maneja datos de clientes o diseños de productos, validar la presencia de información sensible es esencial; un DLP como Endpoint Protector permite controlar y proteger esos datos en los endpoints, reduciendo el riesgo de fuga y cumpliendo con requisitos de privacidad.\"}]}],\"conclusion\":{\"resumen\":\"Con la información disponible se identifican oportunidades para validar la gestión de activos y la protección contra malware en los endpoints, y potencialmente la prevención de fuga de datos.\",\"siguiente_paso\":\"Programar una reunión para validar estos aspectos y profundizar en los controles actuales.\"}}"
+    }
+  ]
+}
